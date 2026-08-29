@@ -1,6 +1,7 @@
-import { CalendarDays, ChevronLeft, ChevronRight, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react'
+import { CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import CompleteRecipeModal from './CompleteRecipeModal'
 
 const mealTypes = [
   { id: 'desayuno', label: 'Desayuno' },
@@ -26,6 +27,12 @@ type PlannedRecipe = {
   recipe: { id: string; name: string } | null
 }
 
+type ConsumptionLog = {
+  id: string
+  recipe_id: string | null
+  consumed_at: string
+}
+
 type MenuEntry = {
   id: string
   planned_date: string
@@ -33,6 +40,7 @@ type MenuEntry = {
   is_eating_out: boolean
   completed_at: string | null
   menu_entry_recipes: PlannedRecipe[]
+  consumption_logs: ConsumptionLog[]
 }
 
 type SlotDraftRecipe = {
@@ -45,6 +53,13 @@ type SlotDraft = {
   meal: MealType
   mode: 'recipes' | 'eating_out'
   recipes: SlotDraftRecipe[]
+}
+
+type CompletionTarget = {
+  entryId: string
+  recipeId: string
+  recipeName: string
+  servings: number
 }
 
 const dayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
@@ -97,6 +112,7 @@ export default function MenuSection() {
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
   const [draft, setDraft] = useState<SlotDraft | null>(null)
+  const [completionTarget, setCompletionTarget] = useState<CompletionTarget | null>(null)
 
   const weekDays = useMemo(
     () => Array.from({ length: 7 }, (_, index) => {
@@ -118,7 +134,6 @@ export default function MenuSection() {
       .from('recipes')
       .select('id, name, base_servings')
       .order('name')
-
     if (queryError) throw queryError
     setRecipes((data ?? []) as Recipe[])
   }, [])
@@ -144,12 +159,16 @@ export default function MenuSection() {
             servings,
             sort_order,
             recipe:recipes (id, name)
+          ),
+          consumption_logs (
+            id,
+            recipe_id,
+            consumed_at
           )
         `)
         .gte('planned_date', from)
         .lte('planned_date', to)
         .order('planned_date')
-
       if (queryError) throw queryError
       setEntries((data ?? []) as unknown as MenuEntry[])
     } catch (cause) {
@@ -169,6 +188,10 @@ export default function MenuSection() {
 
   const openSlot = (date: string, meal: MealType) => {
     const current = entriesBySlot.get(slotKey(date, meal))
+    if ((current?.consumption_logs?.length ?? 0) > 0) {
+      setError('Esta franja ya tiene consumos registrados y no puede replanificarse.')
+      return
+    }
     setDraft({
       date,
       meal,
@@ -183,10 +206,13 @@ export default function MenuSection() {
 
   const saveSlot = async () => {
     if (!supabase || !draft) return
-
     const current = entriesBySlot.get(slotKey(draft.date, draft.meal))
-    const validRecipes = draft.recipes.filter((item) => item.recipeId && Number(item.servings) > 0)
+    if ((current?.consumption_logs?.length ?? 0) > 0) {
+      setError('Esta franja ya tiene consumos registrados y no puede modificarse.')
+      return
+    }
 
+    const validRecipes = draft.recipes.filter((item) => item.recipeId && Number(item.servings) > 0)
     if (draft.mode === 'recipes' && draft.recipes.length > 0 && validRecipes.length !== draft.recipes.length) {
       setError('Revisa las recetas y raciones antes de guardar.')
       return
@@ -218,12 +244,7 @@ export default function MenuSection() {
       } else {
         const { data: inserted, error: insertError } = await supabase
           .from('menu_entries')
-          .insert({
-            user_id: userData.user.id,
-            planned_date: draft.date,
-            meal: draft.meal,
-            is_eating_out: draft.mode === 'eating_out',
-          })
+          .insert({ user_id: userData.user.id, planned_date: draft.date, meal: draft.meal, is_eating_out: draft.mode === 'eating_out' })
           .select('id')
           .single()
         if (insertError) throw insertError
@@ -231,7 +252,6 @@ export default function MenuSection() {
       }
 
       if (!entryId) throw new Error('No se pudo guardar la franja del menú.')
-
       const { error: clearError } = await supabase.from('menu_entry_recipes').delete().eq('menu_entry_id', entryId)
       if (clearError) throw clearError
 
@@ -241,14 +261,8 @@ export default function MenuSection() {
           if (uniqueRecipeIds.has(item.recipeId)) throw new Error('Una misma receta no puede añadirse dos veces en la misma comida.')
           uniqueRecipeIds.add(item.recipeId)
         }
-
         const { error: recipesError } = await supabase.from('menu_entry_recipes').insert(
-          validRecipes.map((item, index) => ({
-            menu_entry_id: entryId,
-            recipe_id: item.recipeId,
-            servings: Number(item.servings),
-            sort_order: index,
-          })),
+          validRecipes.map((item, index) => ({ menu_entry_id: entryId, recipe_id: item.recipeId, servings: Number(item.servings), sort_order: index })),
         )
         if (recipesError) throw recipesError
       }
@@ -265,11 +279,14 @@ export default function MenuSection() {
   const clearSlot = async () => {
     if (!supabase || !draft) return
     const current = entriesBySlot.get(slotKey(draft.date, draft.meal))
+    if ((current?.consumption_logs?.length ?? 0) > 0) {
+      setError('No se puede borrar una franja con consumos registrados.')
+      return
+    }
     if (!current) {
       setDraft(null)
       return
     }
-
     setSaving(true)
     setError('')
     const { error: deleteError } = await supabase.from('menu_entries').delete().eq('id', current.id)
@@ -293,32 +310,13 @@ export default function MenuSection() {
           <p className="mt-2 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
-            onClick={() => setWeekStart(addDays(weekStart, -7))}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm hover:bg-neutral-50"
-            aria-label="Semana anterior"
-          >
-            <ChevronLeft size={18} />
-          </button>
-          <button
-            onClick={() => setWeekStart(startOfWeek(new Date()))}
-            className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50"
-          >
-            Esta semana
-          </button>
-          <button
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-            className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm hover:bg-neutral-50"
-            aria-label="Semana siguiente"
-          >
-            <ChevronRight size={18} />
-          </button>
+          <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm hover:bg-neutral-50" aria-label="Semana anterior"><ChevronLeft size={18} /></button>
+          <button onClick={() => setWeekStart(startOfWeek(new Date()))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm hover:bg-neutral-50">Esta semana</button>
+          <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm hover:bg-neutral-50" aria-label="Semana siguiente"><ChevronRight size={18} /></button>
         </div>
       </header>
 
-      {error && !draft && (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-      )}
+      {error && !draft && !completionTarget && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       {loading ? (
         <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-sm text-neutral-500 shadow-sm">Cargando menú…</div>
@@ -329,10 +327,7 @@ export default function MenuSection() {
             return (
               <section key={day.date} className={`rounded-3xl border bg-white p-5 shadow-sm ${today ? 'border-neutral-400' : 'border-neutral-200'}`}>
                 <div className="flex items-center justify-between">
-                  <div>
-                    <h2 className="text-lg font-semibold text-neutral-900">{day.label}</h2>
-                    <p className="mt-0.5 text-xs text-neutral-400">{formatShortDate(day.date)}{today ? ' · Hoy' : ''}</p>
-                  </div>
+                  <div><h2 className="text-lg font-semibold text-neutral-900">{day.label}</h2><p className="mt-0.5 text-xs text-neutral-400">{formatShortDate(day.date)}{today ? ' · Hoy' : ''}</p></div>
                   <CalendarDays size={18} className="text-neutral-300" />
                 </div>
 
@@ -340,32 +335,54 @@ export default function MenuSection() {
                   {mealTypes.map((meal) => {
                     const entry = entriesBySlot.get(slotKey(day.date, meal.id))
                     const planned = entry?.menu_entry_recipes?.slice().sort((a, b) => a.sort_order - b.sort_order) ?? []
+                    const hasConsumption = (entry?.consumption_logs?.length ?? 0) > 0
                     return (
-                      <button
-                        key={meal.id}
-                        onClick={() => openSlot(day.date, meal.id)}
-                        className="flex w-full items-start justify-between gap-4 py-3 text-left first:pt-0 last:pb-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="text-sm font-medium text-neutral-800">{meal.label}</p>
-                          {entry?.is_eating_out ? (
-                            <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500"><UtensilsCrossed size={13} /> Comida fuera</p>
-                          ) : planned.length > 0 ? (
-                            <div className="mt-1 space-y-1">
-                              {planned.map((item) => (
-                                <p key={item.id} className="truncate text-xs text-neutral-500">
-                                  {item.recipe?.name ?? 'Receta'} · {Number(item.servings).toLocaleString('es-ES')} {Number(item.servings) === 1 ? 'ración' : 'raciones'}
-                                </p>
-                              ))}
+                      <div key={meal.id} className="py-3 first:pt-0 last:pb-0">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium text-neutral-800">{meal.label}</p>
+                              {entry?.completed_at && <span className="flex items-center gap-1 text-[11px] font-medium text-emerald-700"><CheckCircle2 size={12} /> Completada</span>}
                             </div>
-                          ) : (
-                            <p className="mt-1 text-xs text-neutral-400">Sin planificar</p>
-                          )}
+                            {entry?.is_eating_out ? (
+                              <p className="mt-1 flex items-center gap-1.5 text-xs font-medium text-neutral-500"><UtensilsCrossed size={13} /> Comida fuera</p>
+                            ) : planned.length > 0 ? (
+                              <div className="mt-2 space-y-2">
+                                {planned.map((item) => {
+                                  const completed = entry?.consumption_logs?.some((log) => log.recipe_id === item.recipe_id) ?? false
+                                  return (
+                                    <div key={item.id} className="flex items-center justify-between gap-3 rounded-xl bg-neutral-50 px-3 py-2">
+                                      <div className="min-w-0">
+                                        <p className="truncate text-xs font-medium text-neutral-700">{item.recipe?.name ?? 'Receta'}</p>
+                                        <p className="mt-0.5 text-[11px] text-neutral-400">{Number(item.servings).toLocaleString('es-ES')} {Number(item.servings) === 1 ? 'ración' : 'raciones'}</p>
+                                      </div>
+                                      {completed ? (
+                                        <span className="flex shrink-0 items-center gap-1 text-[11px] font-medium text-emerald-700"><CheckCircle2 size={13} /> Hecha</span>
+                                      ) : (
+                                        <button
+                                          onClick={() => setCompletionTarget({ entryId: entry!.id, recipeId: item.recipe_id, recipeName: item.recipe?.name ?? 'Receta', servings: Number(item.servings) })}
+                                          className="shrink-0 rounded-lg bg-neutral-900 px-2.5 py-1.5 text-[11px] font-medium text-white hover:bg-neutral-700"
+                                        >
+                                          Completar
+                                        </button>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            ) : (
+                              <p className="mt-1 text-xs text-neutral-400">Sin planificar</p>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => openSlot(day.date, meal.id)}
+                            disabled={hasConsumption}
+                            className="mt-0.5 shrink-0 rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+                          >
+                            {entry ? 'Editar' : 'Añadir'}
+                          </button>
                         </div>
-                        <span className="mt-0.5 shrink-0 rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50">
-                          {entry ? 'Editar' : 'Añadir'}
-                        </span>
-                      </button>
+                      </div>
                     )
                   })}
                 </div>
@@ -379,113 +396,63 @@ export default function MenuSection() {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && !saving && setDraft(null)}>
           <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:p-6">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-neutral-500">{formatShortDate(draft.date)}</p>
-                <h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{selectedMealLabel}</h2>
-              </div>
-              <button disabled={saving} onClick={() => setDraft(null)} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar">
-                <X size={19} />
-              </button>
+              <div><p className="text-sm font-medium text-neutral-500">{formatShortDate(draft.date)}</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{selectedMealLabel}</h2></div>
+              <button disabled={saving} onClick={() => setDraft(null)} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar"><X size={19} /></button>
             </div>
 
             <div className="mt-6 grid grid-cols-2 rounded-2xl bg-neutral-100 p-1">
-              <button
-                onClick={() => setDraft({ ...draft, mode: 'recipes' })}
-                className={`rounded-xl px-3 py-2 text-sm font-medium ${draft.mode === 'recipes' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}
-              >
-                Recetas
-              </button>
-              <button
-                onClick={() => setDraft({ ...draft, mode: 'eating_out', recipes: [] })}
-                className={`rounded-xl px-3 py-2 text-sm font-medium ${draft.mode === 'eating_out' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}
-              >
-                Comida fuera
-              </button>
+              <button onClick={() => setDraft({ ...draft, mode: 'recipes' })} className={`rounded-xl px-3 py-2 text-sm font-medium ${draft.mode === 'recipes' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}>Recetas</button>
+              <button onClick={() => setDraft({ ...draft, mode: 'eating_out', recipes: [] })} className={`rounded-xl px-3 py-2 text-sm font-medium ${draft.mode === 'eating_out' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}>Comida fuera</button>
             </div>
 
             {draft.mode === 'eating_out' ? (
-              <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-600">
-                Esta franja no añadirá ingredientes a la lista de la compra ni descontará productos de la despensa.
-              </div>
+              <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-5 text-sm text-neutral-600">Esta franja no añadirá ingredientes a la lista de la compra ni descontará productos de la despensa.</div>
             ) : (
               <div className="mt-5 space-y-3">
                 {draft.recipes.map((item, index) => (
                   <div key={`${item.recipeId}-${index}`} className="grid grid-cols-[minmax(0,1fr)_90px_40px] gap-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-3">
                     <div>
                       <label className="mb-1 block text-xs font-medium text-neutral-500">Receta</label>
-                      <select
-                        value={item.recipeId}
-                        onChange={(event) => {
-                          const next = [...draft.recipes]
-                          next[index] = { ...next[index], recipeId: event.target.value }
-                          setDraft({ ...draft, recipes: next })
-                        }}
-                        className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400"
-                      >
+                      <select value={item.recipeId} onChange={(event) => { const next = [...draft.recipes]; next[index] = { ...next[index], recipeId: event.target.value }; setDraft({ ...draft, recipes: next }) }} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400">
                         <option value="">Seleccionar…</option>
                         {recipes.map((recipe) => <option key={recipe.id} value={recipe.id}>{recipe.name}</option>)}
                       </select>
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-neutral-500">Raciones</label>
-                      <input
-                        type="number"
-                        min="0.25"
-                        step="0.25"
-                        value={item.servings}
-                        onChange={(event) => {
-                          const next = [...draft.recipes]
-                          next[index] = { ...next[index], servings: event.target.value }
-                          setDraft({ ...draft, recipes: next })
-                        }}
-                        className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400"
-                      />
+                      <input type="number" min="0.25" step="0.25" value={item.servings} onChange={(event) => { const next = [...draft.recipes]; next[index] = { ...next[index], servings: event.target.value }; setDraft({ ...draft, recipes: next }) }} className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
                     </div>
-                    <button
-                      onClick={() => setDraft({ ...draft, recipes: draft.recipes.filter((_, recipeIndex) => recipeIndex !== index) })}
-                      className="mt-5 grid h-10 w-10 place-items-center rounded-xl text-neutral-400 hover:bg-white hover:text-red-500"
-                      aria-label="Quitar receta"
-                    >
-                      <Trash2 size={17} />
-                    </button>
+                    <button onClick={() => setDraft({ ...draft, recipes: draft.recipes.filter((_, recipeIndex) => recipeIndex !== index) })} className="mt-5 grid h-10 w-10 place-items-center rounded-xl text-neutral-400 hover:bg-white hover:text-red-500" aria-label="Quitar receta"><Trash2 size={17} /></button>
                   </div>
                 ))}
 
                 {recipes.length === 0 ? (
                   <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">Primero necesitas crear alguna receta.</p>
                 ) : (
-                  <button
-                    onClick={() => setDraft({ ...draft, recipes: [...draft.recipes, { recipeId: '', servings: '1' }] })}
-                    className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-4 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
-                  >
-                    <Plus size={16} /> Añadir receta
-                  </button>
+                  <button onClick={() => setDraft({ ...draft, recipes: [...draft.recipes, { recipeId: '', servings: '1' }] })} className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-neutral-300 px-4 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50"><Plus size={16} /> Añadir receta</button>
                 )}
               </div>
             )}
 
-            {error && (
-              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-            )}
+            {error && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
             <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-              <button
-                disabled={saving}
-                onClick={() => void clearSlot()}
-                className="rounded-2xl px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                Dejar sin planificar
-              </button>
-              <button
-                disabled={saving}
-                onClick={() => void saveSlot()}
-                className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-              >
-                {saving ? 'Guardando…' : 'Guardar'}
-              </button>
+              <button disabled={saving} onClick={() => void clearSlot()} className="rounded-2xl px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50">Dejar sin planificar</button>
+              <button disabled={saving} onClick={() => void saveSlot()} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar'}</button>
             </div>
           </div>
         </div>
+      )}
+
+      {completionTarget && (
+        <CompleteRecipeModal
+          {...completionTarget}
+          onClose={() => setCompletionTarget(null)}
+          onCompleted={() => {
+            setCompletionTarget(null)
+            void loadWeek()
+          }}
+        />
       )}
     </div>
   )
