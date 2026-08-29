@@ -56,13 +56,14 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
   const [error, setError] = useState('')
 
   useEffect(() => {
-    if (!supabase) return
+    const client = supabase
+    if (!client) return
 
     const load = async () => {
       setLoading(true)
       setError('')
       try {
-        const { data: recipe, error: recipeError } = await supabase
+        const { data: recipe, error: recipeError } = await client
           .from('recipes')
           .select(`
             base_servings,
@@ -82,7 +83,7 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
         const pantryMap = new Map<string, PantryRow>()
 
         if (ingredientIds.length > 0) {
-          const { data: pantry, error: pantryError } = await supabase
+          const { data: pantry, error: pantryError } = await client
             .from('pantry_items')
             .select('ingredient_id, quantity, unit, status')
             .in('ingredient_id', ingredientIds)
@@ -120,7 +121,8 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
   )
 
   const confirm = async () => {
-    if (!supabase) return
+    const client = supabase
+    if (!client) return
     if (items.some((item) => item.quantity.trim() === '' || Number(item.quantity) < 0)) {
       setError('Revisa las cantidades antes de confirmar.')
       return
@@ -129,7 +131,7 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
     setSaving(true)
     setError('')
     try {
-      const { error: rpcError } = await supabase.rpc('complete_planned_recipe', {
+      const { error: rpcError } = await client.rpc('complete_planned_recipe', {
         p_menu_entry_id: entryId,
         p_recipe_id: recipeId,
         p_servings: servings,
