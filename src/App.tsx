@@ -1,5 +1,6 @@
 import { CalendarDays, ChefHat, PackageOpen, ShoppingBasket } from 'lucide-react'
 import { useState } from 'react'
+import PantrySection from './components/PantrySection'
 import RecipesSection from './components/RecipesSection'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa'
@@ -102,13 +103,7 @@ function App() {
               action="Generar lista"
             />
           )}
-          {section === 'despensa' && (
-            <EmptyCard
-              title="Tu despensa"
-              text="Podrás controlar productos con cantidades exactas o simplemente marcar si tienes, queda poco o no tienes."
-              action="Añadir producto"
-            />
-          )}
+          {section === 'despensa' && <PantrySection />}
         </main>
       </div>
 
