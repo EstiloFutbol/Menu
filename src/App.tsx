@@ -1,5 +1,6 @@
 import { CalendarDays, ChefHat, PackageOpen, ShoppingBasket } from 'lucide-react'
 import { useState } from 'react'
+import MenuSection from './components/MenuSection'
 import PantrySection from './components/PantrySection'
 import RecipesSection from './components/RecipesSection'
 
@@ -12,8 +13,6 @@ const sections: Array<{ id: Section; label: string; icon: typeof CalendarDays }>
   { id: 'despensa', label: 'Despensa', icon: PackageOpen },
 ]
 
-const meals = ['Desayuno', 'Almuerzo', 'Comida', 'Merienda', 'Cena']
-
 function EmptyCard({ title, text, action }: { title: string; text: string; action: string }) {
   return (
     <div className="rounded-3xl border border-neutral-200 bg-white p-6 shadow-sm">
@@ -22,43 +21,6 @@ function EmptyCard({ title, text, action }: { title: string; text: string; actio
       <button className="mt-5 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-neutral-700">
         {action}
       </button>
-    </div>
-  )
-}
-
-function MenuSection() {
-  return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-neutral-500">Semana actual</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Tu menú</h1>
-        </div>
-        <button className="rounded-2xl border border-neutral-200 bg-white px-4 py-2 text-sm font-medium text-neutral-700 shadow-sm">
-          Copiar semana
-        </button>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        {['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'].map((day) => (
-          <section key={day} className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">{day}</h2>
-            <div className="mt-4 divide-y divide-neutral-100">
-              {meals.map((meal) => (
-                <div key={meal} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
-                  <div>
-                    <p className="text-sm font-medium text-neutral-800">{meal}</p>
-                    <p className="mt-0.5 text-xs text-neutral-400">Sin planificar</p>
-                  </div>
-                  <button className="rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-600 hover:bg-neutral-50">
-                    Añadir
-                  </button>
-                </div>
-              ))}
-            </div>
-          </section>
-        ))}
-      </div>
     </div>
   )
 }
