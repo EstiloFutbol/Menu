@@ -1,5 +1,6 @@
 import { CalendarDays, ChefHat, PackageOpen, ShoppingBasket } from 'lucide-react'
 import { useState } from 'react'
+import RecipesSection from './components/RecipesSection'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa'
 
@@ -93,13 +94,7 @@ function App() {
 
         <main className="min-w-0 flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-10 lg:pt-9">
           {section === 'menu' && <MenuSection />}
-          {section === 'recetas' && (
-            <EmptyCard
-              title="Tus recetas"
-              text="Aquí guardarás recetas con raciones, ingredientes estructurados, cantidades, pasos e información nutricional por ración."
-              action="Crear primera receta"
-            />
-          )}
+          {section === 'recetas' && <RecipesSection />}
           {section === 'compra' && (
             <EmptyCard
               title="Lista de la compra"
