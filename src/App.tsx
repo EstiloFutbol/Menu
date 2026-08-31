@@ -2,8 +2,8 @@ import { CalendarDays, ChefHat, PackageOpen, ShoppingBasket } from 'lucide-react
 import { useState } from 'react'
 import MenuSection from './components/MenuSection'
 import PantrySection from './components/PantrySection'
+import PurchaseAreaSection from './components/PurchaseAreaSection'
 import RecipesSection from './components/RecipesSection'
-import ShoppingSection from './components/ShoppingSection'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa'
 
@@ -47,7 +47,7 @@ function App() {
         <main className="min-w-0 flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-10 lg:pt-9">
           {section === 'menu' && <MenuSection />}
           {section === 'recetas' && <RecipesSection />}
-          {section === 'compra' && <ShoppingSection />}
+          {section === 'compra' && <PurchaseAreaSection />}
           {section === 'despensa' && <PantrySection />}
         </main>
       </div>
