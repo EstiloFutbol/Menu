@@ -18,7 +18,7 @@ const dayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábad
 
 type Ingredient = { id: string; name: string; category: string | null; default_unit: Unit | null }
 type PlannedProduct = { id: string; menu_entry_id: string; ingredient_id: string; quantity: number; unit: Unit; sort_order: number; ingredient: Ingredient | null }
-type MenuEntry = { id: string; planned_date: string; meal: MealType }
+type MenuEntry = { id: string; planned_date: string; meal: MealType; is_eating_out?: boolean }
 type Draft = { date: string; meal: MealType; ingredientId: string; quantity: string; unit: Unit }
 
 function startOfWeek(date: Date) {
@@ -72,7 +72,7 @@ export default function MenuProductsSection() {
       const to = dateString(addDays(weekStart, 6))
       const [ingredientResult, entryResult] = await Promise.all([
         supabase.from('ingredients').select('id,name,category,default_unit').order('name'),
-        supabase.from('menu_entries').select('id,planned_date,meal').gte('planned_date', from).lte('planned_date', to).order('planned_date'),
+        supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out').gte('planned_date', from).lte('planned_date', to).order('planned_date'),
       ])
       if (ingredientResult.error) throw ingredientResult.error
       if (entryResult.error) throw entryResult.error
@@ -112,25 +112,38 @@ export default function MenuProductsSection() {
     return map
   }, [products])
 
-  const openAdd = (date: string, meal: MealType) => {
+  const openAdd = async (date: string, meal: MealType) => {
+    if (!supabase) return
     setError('')
-    const existing = entryBySlot.get(`${date}:${meal}`)
-    if (!existing) {
-      setError('Primero añade una receta o crea la franja del menú. Los productos directos se guardan dentro de esa comida.')
+    let existing = entryBySlot.get(`${date}:${meal}`)
+    if (existing?.is_eating_out) {
+      setError('Esta franja está marcada como comida fuera. Cámbiala primero a una comida normal.')
       return
     }
-    setDraft({ date, meal, ingredientId: '', quantity: '1', unit: 'unidad' })
+    if (!existing) {
+      const { data: userData, error: userError } = await supabase.auth.getUser()
+      if (userError || !userData.user) { setError('No se ha encontrado la sesión de usuario.'); return }
+      const { data, error: insertError } = await supabase
+        .from('menu_entries')
+        .insert({ user_id: userData.user.id, planned_date: date, meal, is_eating_out: false })
+        .select('id,planned_date,meal,is_eating_out')
+        .single()
+      if (insertError) { setError(insertError.message); return }
+      existing = data as MenuEntry
+      setEntries((current) => [...current, existing!])
+    }
+    setDraft({ date, meal, ingredientId: '', quantity: '1', unit: existing ? 'unidad' : 'unidad' })
   }
 
   const saveProduct = async () => {
     if (!supabase || !draft) return
-    const entry = entryBySlot.get(`${draft.date}:${draft.meal}`)
+    const entry = entryBySlot.get(`${draft.date}:${draft.meal}`) ?? entries.find((item) => item.planned_date === draft.date && item.meal === draft.meal)
     const quantity = Number(draft.quantity)
     if (!entry) { setError('No existe la franja seleccionada.'); return }
     if (!draft.ingredientId || !Number.isFinite(quantity) || quantity <= 0) { setError('Selecciona un producto e indica una cantidad válida.'); return }
 
     const duplicate = products.some((item) => item.menu_entry_id === entry.id && item.ingredient_id === draft.ingredientId)
-    if (duplicate) { setError('Ese producto ya está añadido a esta comida. Edítalo desde la lista o elige otro.'); return }
+    if (duplicate) { setError('Ese producto ya está añadido a esta comida. Elige otro.'); return }
 
     setSaving(true)
     setError('')
@@ -194,7 +207,7 @@ export default function MenuProductsSection() {
                             </div>
                           ))}</div> : <p className="mt-1 text-xs text-neutral-400">Sin productos directos</p>}
                         </div>
-                        <button onClick={() => openAdd(day.date, meal.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50" aria-label={`Añadir producto a ${meal.label}`}><Plus size={15} /></button>
+                        <button onClick={() => void openAdd(day.date, meal.id)} className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50" aria-label={`Añadir producto a ${meal.label}`}><Plus size={15} /></button>
                       </div>
                     </div>
                   )
