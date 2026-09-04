@@ -32,3 +32,40 @@ textarea {
 button {
   cursor: pointer;
 }
+
+/*
+ * La cuadrícula semanal usa siete columnas estrechas. Los contenidos de cada
+ * celda deben encogerse dentro de su columna: sin min-width: 0, los nombres
+ * largos fuerzan ancho de max-content y terminan invadiendo el día siguiente.
+ */
+@media (min-width: 1024px) {
+  [class*="grid-cols-[110px_repeat"] button {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  [class*="grid-cols-[110px_repeat"] button > div {
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  [class*="grid-cols-[110px_repeat"] button > div > div {
+    width: 100%;
+    min-width: 0;
+    flex: 1 1 0%;
+    overflow: hidden;
+  }
+
+  [class*="grid-cols-[110px_repeat"] button p {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* El estado ya se muestra por receta/producto; evitamos un segundo check flotante por comida. */
+  [class*="grid-cols-[110px_repeat"] button > div > svg {
+    display: none;
+  }
+}
