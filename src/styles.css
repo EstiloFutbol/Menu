@@ -68,4 +68,26 @@ button {
   [class*="grid-cols-[110px_repeat"] button > div > svg {
     display: none;
   }
+
+  /* Las filas pendientes son accionables para completar sin abrir la edición. */
+  [class*="grid-cols-[110px_repeat"] .cursor-pointer > div::after {
+    content: '✓';
+    display: grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    flex: 0 0 14px;
+    border: 1px solid #a3a3a3;
+    border-radius: 9999px;
+    color: transparent;
+    font-size: 9px;
+    line-height: 1;
+    transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+  }
+
+  [class*="grid-cols-[110px_repeat"] .cursor-pointer:hover > div::after {
+    border-color: #059669;
+    background: #ecfdf5;
+    color: #059669;
+  }
 }
