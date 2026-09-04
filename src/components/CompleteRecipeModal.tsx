@@ -28,7 +28,7 @@ type DraftItem = {
 }
 
 type Props = {
-  entryId: string
+  plannedRecipeId: string
   recipeId: string
   recipeName: string
   servings: number
@@ -49,7 +49,7 @@ function compatible(quantity: number, from: Unit, to: Unit) {
   return null
 }
 
-export default function CompleteRecipeModal({ entryId, recipeId, recipeName, servings, onClose, onCompleted }: Props) {
+export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeName, servings, onClose, onCompleted }: Props) {
   const [items, setItems] = useState<DraftItem[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -132,8 +132,7 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
     setError('')
     try {
       const { error: rpcError } = await client.rpc('complete_planned_recipe', {
-        p_menu_entry_id: entryId,
-        p_recipe_id: recipeId,
+        p_menu_entry_recipe_id: plannedRecipeId,
         p_servings: servings,
         p_items: items.map((item) => ({
           ingredient_id: item.ingredientId,
@@ -145,7 +144,7 @@ export default function CompleteRecipeModal({ entryId, recipeId, recipeName, ser
       onCompleted()
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'No se pudo completar la receta.'
-      setError(message.includes('already been completed') ? 'Esta receta ya estaba completada. No se ha descontado nada de nuevo.' : message)
+      setError(message.includes('already been completed') ? 'Esta planificación ya estaba completada. No se ha descontado nada de nuevo.' : message)
     } finally {
       setSaving(false)
     }
