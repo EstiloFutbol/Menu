@@ -28,15 +28,20 @@ El objetivo del producto es conectar estas cuatro áreas:
 
 ### Menú
 
-- Vista semanal.
 - Cinco franjas diarias: desayuno, almuerzo, comida, merienda y cena.
 - Varias recetas por franja.
 - Productos directos por franja.
 - Raciones y cantidades configurables.
 - Opción `Comida fuera`.
 - Navegación entre semanas.
+- Escritorio: cuadrícula semanal compacta de 7 días × 5 comidas para reducir el scroll.
+- Móvil: selector de los siete días y vista compacta de un único día.
 - Confirmación individual del consumo de recetas y productos.
-- Histórico de consumo asociado a la planificación.
+- Histórico de consumo asociado a cada entrada planificada.
+- Las entradas ya consumidas quedan protegidas para evitar dobles descuentos o cambios retrospectivos.
+- Una franja completada puede reabrirse para añadir nuevos consumos posteriores.
+- Se puede volver a añadir la misma receta o producto en una misma franja como una nueva entrada independiente y consumirla por separado.
+- Al añadir algo nuevo a una franja completada, la comida vuelve a quedar pendiente hasta completar las nuevas entradas.
 
 ### Recetas
 
@@ -64,15 +69,18 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Productos vinculados al catálogo de ingredientes.
 - Control por cantidad exacta y unidad.
 - Control alternativo por estado: `tengo`, `queda poco` o `no tengo`.
+- Los productos con cantidad `0` o estado `no tengo` no se muestran en la vista principal.
+- Resumen rápido del inventario y productos con pocas existencias.
+- Agrupación por categorías.
+- Diseño compacto para lectura rápida tanto en escritorio como en móvil.
 - Notas opcionales.
 - Actualización automática al registrar consumos compatibles.
 
 ## Próximas líneas de evolución
 
-- Mejorar la visualización semanal del menú en escritorio y móvil.
-- Mejorar la lectura rápida de la despensa y ocultar productos sin existencias.
 - Ampliar cobertura de tests de lógica de negocio y operaciones de Supabase.
-- Generación y ajuste más automático de la lista de compra.
+- Seguir automatizando el flujo Menú → Compra → Despensa → Consumo.
+- Mejorar la generación y ajuste automático de la lista de compra.
 - Futuro: lectura de tickets mediante imagen para registrar compras automáticamente.
 - Futuro: sugerencias de menú y recetas según despensa, preferencias, coste y nutrición.
 
@@ -110,6 +118,8 @@ supabase/migrations/
 Las migraciones deben ser suficientes para crear un proyecto Supabase vacío desde cero. No se mantiene un `schema.sql` paralelo como segunda fuente de verdad.
 
 Las tablas usan Row Level Security para aislar los datos de cada usuario.
+
+La migración incremental `20260904_repeatable_menu_consumption.sql` adapta una base existente para que cada receta planificada tenga identidad propia en el histórico de consumo. Esto permite repetir una misma receta varias veces dentro de una comida sin confundir los consumos anteriores.
 
 ## Desarrollo local
 
@@ -152,11 +162,13 @@ npm run build
 
 El build ejecuta TypeScript y genera la aplicación de producción con Vite.
 
-## Despliegue
+## CI y despliegue
+
+Los pull requests ejecutan tests y build antes de integrarse.
 
 `.github/workflows/deploy-pages.yml` publica la aplicación en GitHub Pages cuando se actualiza `main`.
 
-El workflow realiza:
+El flujo de publicación realiza:
 
 1. Instalación de dependencias.
 2. Tests.
@@ -167,6 +179,8 @@ Secrets necesarios en GitHub:
 
 - `VITE_SUPABASE_URL`
 - `VITE_SUPABASE_PUBLISHABLE_KEY`
+
+Las migraciones de Supabase forman parte del código versionado, pero deben estar aplicadas también en la base de datos utilizada por producción cuando incorporan cambios de esquema o funciones SQL.
 
 ## Estrategia de desarrollo
 
