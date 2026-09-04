@@ -119,7 +119,9 @@ Las migraciones deben ser suficientes para crear un proyecto Supabase vacío des
 
 Las tablas usan Row Level Security para aislar los datos de cada usuario.
 
-La migración incremental `20260904_repeatable_menu_consumption.sql` adapta una base existente para que cada receta planificada tenga identidad propia en el histórico de consumo. Esto permite repetir una misma receta varias veces dentro de una comida sin confundir los consumos anteriores.
+La migración incremental `20260904000100_repeat_consumption.sql` adapta una base existente para que cada receta planificada tenga identidad propia en el histórico de consumo. Esto permite repetir una misma receta varias veces dentro de una comida sin confundir los consumos anteriores.
+
+La migración `20260904000200_security_drift_fix.sql` alinea instalaciones existentes con la configuración de seguridad actual: las operaciones de consumo directo se ejecutan con los permisos del usuario autenticado y las funciones auxiliares fijan explícitamente su `search_path`.
 
 ## Desarrollo local
 
