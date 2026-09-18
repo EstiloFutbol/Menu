@@ -1,7 +1,7 @@
 import { Camera, CheckCircle2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseReceiptText, scoreReceiptText } from '../lib/receipt'
+import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeDecimalInput, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { supabase } from '../lib/supabase'
 
@@ -212,14 +212,16 @@ export default function ReceiptImportSection() {
   }
 
   const selectedLines = lines.filter((line) => line.include)
-  const detectedTotal = selectedLines.reduce((sum, line) => sum + (Number(line.totalPrice) || 0), 0)
+  const detectedTotal = selectedLines.reduce((sum, line) => sum + (parseDecimalInput(line.totalPrice) ?? 0), 0)
 
   function pantryHint(line: ReviewLine) {
     if (!line.ingredientId || !line.addToPantry) return null
     const current = pantryByIngredient.get(line.ingredientId)
     if (!current) return 'Se creará en despensa con esta cantidad.'
     if (current.quantity == null) return 'Ahora se controla por estado: se marcará como “Tengo”.'
-    const converted = compatibleQuantity(Number(line.quantity), line.unit, current.unit ?? line.unit)
+    const quantity = parseDecimalInput(line.quantity)
+    if (quantity == null) return 'Cantidad inválida.'
+    const converted = compatibleQuantity(quantity, line.unit, current.unit ?? line.unit)
     if (converted == null) return 'Unidad incompatible con la despensa actual. Cámbiala antes de importar.'
     return `Se sumará a ${current.quantity} ${current.unit ?? ''} existentes.`
   }
@@ -229,13 +231,16 @@ export default function ReceiptImportSection() {
     setError('')
     setSuccess('')
     if (!storeName.trim()) { setError('Revisa el nombre de la tienda.'); return }
-    if (!totalAmount || !Number.isFinite(Number(totalAmount)) || Number(totalAmount) < 0) { setError('Revisa el total del ticket.'); return }
+    const parsedTotalAmount = parseDecimalInput(totalAmount)
+    if (parsedTotalAmount == null || parsedTotalAmount < 0) { setError('Revisa el total del ticket.'); return }
     if (!selectedLines.length) { setError('Selecciona al menos un producto.'); return }
 
     for (const line of selectedLines) {
       if (!line.rawName.trim() || !line.translatedName.trim()) { setError('Todos los productos seleccionados necesitan concepto y traducción.'); return }
-      if (!line.quantity || Number(line.quantity) <= 0) { setError(`Revisa la cantidad de ${line.translatedName || line.rawName}.`); return }
-      if (line.totalPrice && Number(line.totalPrice) < 0) { setError(`Revisa el precio de ${line.translatedName || line.rawName}.`); return }
+      const parsedQuantity = parseDecimalInput(line.quantity)
+      const parsedLinePrice = line.totalPrice ? parseDecimalInput(line.totalPrice) : 0
+      if (parsedQuantity == null || parsedQuantity <= 0) { setError(`Revisa la cantidad de ${line.translatedName || line.rawName}.`); return }
+      if (parsedLinePrice == null || parsedLinePrice < 0) { setError(`Revisa el precio de ${line.translatedName || line.rawName}.`); return }
       const hint = pantryHint(line)
       if (line.addToPantry && hint?.startsWith('Unidad incompatible')) { setError(`${line.translatedName}: ${hint}`); return }
     }
@@ -247,16 +252,16 @@ export default function ReceiptImportSection() {
       normalized_name: normalizeReceiptName(line.rawName),
       ingredient_id: line.ingredientId || null,
       category: line.category,
-      quantity: Number(line.quantity),
+      quantity: parseDecimalInput(line.quantity)!,
       unit: line.unit,
-      total_price: line.totalPrice ? Number(line.totalPrice) : 0,
+      total_price: line.totalPrice ? parseDecimalInput(line.totalPrice)! : 0,
       add_to_pantry: line.addToPantry,
     }))
 
     const { error: importError } = await supabase.rpc('import_reviewed_receipt', {
       p_store_name: storeName.trim(),
       p_purchased_at: new Date(purchasedAt).toISOString(),
-      p_total_amount: Number(totalAmount),
+      p_total_amount: parsedTotalAmount,
       p_items: payload,
     })
     setSaving(false)
@@ -310,7 +315,7 @@ export default function ReceiptImportSection() {
     <section className="grid gap-4 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:grid-cols-3">
       <label className="text-sm font-medium text-neutral-700">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <label className="text-sm font-medium text-neutral-700">Total del ticket<input type="number" min="0" step="0.01" value={totalAmount} onChange={(e) => setTotalAmount(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
+      <label className="text-sm font-medium text-neutral-700">Total del ticket<input type="text" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(normalizeDecimalInput(e.target.value))} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span></div>
     </section>
 
@@ -327,9 +332,9 @@ export default function ReceiptImportSection() {
               <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_110px_120px_120px]">
                 <label className="text-xs font-medium text-neutral-500">Concepto del ticket<input value={line.rawName} onChange={(e) => updateLine(line.id, { rawName: e.target.value, matchedByAlias: false })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
                 <label className="text-xs font-medium text-neutral-500">Qué es realmente<input list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
-                <label className="text-xs font-medium text-neutral-500">Cantidad<input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(e) => updateLine(line.id, { quantity: e.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
+                <label className="text-xs font-medium text-neutral-500">Cantidad<input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateLine(line.id, { quantity: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
                 <label className="text-xs font-medium text-neutral-500">Unidad<select value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value as Unit })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
-                <label className="text-xs font-medium text-neutral-500">Precio línea<input type="number" min="0" step="0.01" value={line.totalPrice} onChange={(e) => updateLine(line.id, { totalPrice: e.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
+                <label className="text-xs font-medium text-neutral-500">Precio línea<input type="text" inputMode="decimal" value={line.totalPrice} onChange={(e) => updateLine(line.id, { totalPrice: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
               </div>
               {!line.ingredientId && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-neutral-500">Categoría del nuevo alimento<select value={line.category} onChange={(e) => updateLine(line.id, { category: e.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{categories.map((category) => <option key={category}>{category}</option>)}</select></label><div className="flex items-end"><p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">No coincide con un alimento existente. Al importar se creará “{line.translatedName || '…'}”.</p></div></div>}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3">
