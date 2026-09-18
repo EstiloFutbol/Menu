@@ -35,12 +35,14 @@ export function parseReceiptText(text: string): ParsedReceiptLine[] {
     const line = sourceLine.replace(/\s+/g, ' ').trim()
     if (line.length < 3 || ignoredLinePatterns.some((pattern) => pattern.test(line))) continue
 
-    const priceMatches = [...line.matchAll(/(?:^|\s)(\d{1,4}(?:[.,]\d{2}))(?:\s*€)?(?=\s|$)/g)]
+    const priceMatches = [...line.matchAll(/(?:^|\s)(\d{1,4}(?:[.,]\s?\d{2}))(?:\s*€)?(?=\s|$)/g)]
     if (!priceMatches.length) continue
 
     const lastPrice = priceMatches[priceMatches.length - 1]
     const totalPrice = parseSpanishNumber(lastPrice[1])
     let rawName = line.slice(0, lastPrice.index).trim()
+      .replace(/[|¦]/g, 'I')
+      .replace(/\s{2,}/g, ' ')
     rawName = rawName.replace(/^\d{5,}\s+/, '').replace(/\s+[xX]\s*$/, '').trim()
     if (rawName.length < 2) continue
 
@@ -61,6 +63,19 @@ export function parseReceiptText(text: string): ParsedReceiptLine[] {
   }
 
   return parsed
+}
+
+export function scoreReceiptText(text: string, confidence = 0) {
+  const products = parseReceiptText(text)
+  const hasTotal = extractReceiptTotal(text) != null
+  const hasDate = extractReceiptDate(text) != null
+  const store = guessStoreName(text)
+
+  return products.length * 20
+    + (hasTotal ? 15 : 0)
+    + (hasDate ? 6 : 0)
+    + (store ? 4 : 0)
+    + Math.max(0, Math.min(100, confidence)) / 10
 }
 
 export function extractReceiptTotal(text: string) {
