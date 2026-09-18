@@ -21,6 +21,15 @@ export function normalizeReceiptName(value: string) {
     .replace(/\s+/g, ' ')
 }
 
+export function normalizeDecimalInput(value: string) {
+  return value.trim().replace(/\s/g, '').replace(/,/g, '.')
+}
+
+export function parseDecimalInput(value: string) {
+  const parsed = Number(normalizeDecimalInput(value))
+  return Number.isFinite(parsed) ? parsed : null
+}
+
 export function parseSpanishNumber(value: string) {
   const normalized = value.trim().replace(/\s/g, '').replace(/\.(?=\d{3}(?:\D|$))/g, '').replace(',', '.')
   const parsed = Number(normalized)

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { extractReceiptDate, extractReceiptTotal, normalizeReceiptName, parseReceiptText, scoreReceiptText } from './receipt'
+import { extractReceiptDate, extractReceiptTotal, normalizeDecimalInput, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from './receipt'
 
 describe('ticket OCR helpers', () => {
   it('normaliza conceptos para reutilizar traducciones', () => {
@@ -26,6 +26,12 @@ describe('ticket OCR helpers', () => {
     const poor = 'SUPERMERCADO\nTOTAL 5,00'
     const good = 'SUPERMERCADO\nPAN 1,00\nLECHE 2,00\nTOTAL 3,00'
     expect(scoreReceiptText(good, 70)).toBeGreaterThan(scoreReceiptText(poor, 95))
+  })
+
+  it('normaliza comas decimales antes de guardar', () => {
+    expect(normalizeDecimalInput(' 2,50 ')).toBe('2.50')
+    expect(parseDecimalInput('1,25')).toBe(1.25)
+    expect(parseDecimalInput('3.75')).toBe(3.75)
   })
 
   it('extrae total y fecha para precargar la revision', () => {
