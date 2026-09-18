@@ -64,6 +64,8 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Tienda, fecha, total, descuentos y método de pago.
 - Detalle de líneas de compra, cantidades, precios y precio de referencia.
 - Importación de tickets desde foto con OCR ejecutado en el navegador.
+- Preprocesado local de la imagen (reescalado, contraste y binarización) y OCR multipase.
+- Selección automática de la lectura con más productos válidos, total/fecha detectados y mejor confianza.
 - La imagen del ticket no se almacena ni en Supabase ni en la aplicación: se usa únicamente durante el OCR y se descarta inmediatamente después.
 - Revisión obligatoria antes de guardar: tienda, fecha, total, conceptos, cantidades, unidades y precios.
 - “Traducción” de conceptos abreviados del ticket a alimentos del catálogo.
@@ -91,7 +93,7 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Ampliar cobertura de tests de lógica de negocio y operaciones de Supabase.
 - Seguir automatizando el flujo Menú → Compra → Despensa → Consumo.
 - Mejorar la generación y ajuste automático de la lista de compra.
-- Mejorar progresivamente el reconocimiento de formatos de ticket y sugerencias de equivalencias.
+- Seguir ampliando el reconocimiento de formatos de ticket y sugerencias de equivalencias a partir de tickets reales.
 - Futuro: sugerencias de menú y recetas según despensa, preferencias, coste y nutrición.
 
 ## Stack
