@@ -69,6 +69,9 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Memoria de equivalencias: las traducciones confirmadas se reutilizan en tickets posteriores.
 - Selección individual de qué productos se añaden a la despensa.
 - La importación registra también el ticket y sus líneas en el histórico de compras.
+- Los tickets del histórico se pueden abrir y eliminar.
+- El borrado de un ticket importado revierte de forma transaccional las cantidades que ese ticket añadió a la despensa.
+- El borrado de una línea individual también revierte su efecto de despensa cuando existe un movimiento registrado.
 
 ### Despensa
 
@@ -131,6 +134,8 @@ La migración incremental `20260904000100_repeat_consumption.sql` adapta una bas
 La migración `20260904000200_security_drift_fix.sql` alinea instalaciones existentes con la configuración de seguridad actual: las operaciones de consumo directo se ejecutan con los permisos del usuario autenticado y las funciones auxiliares fijan explícitamente su `search_path`.
 
 La migración `20260918000100_receipt_import.sql` añade las equivalencias de conceptos de ticket y la operación transaccional de importación revisada. La foto no se almacena: el OCR se ejecuta en el navegador y solo se guardan los datos que el usuario confirma.
+
+La migración `20260918000200_reversible_ticket_delete.sql` registra el efecto real de cada línea importada sobre la despensa y añade operaciones transaccionales para borrar líneas o tickets completos revirtiendo primero ese efecto. Los tickets importados antes de esta migración no tienen metadatos suficientes para reconstruir con seguridad un movimiento de despensa pasado, por lo que solo se revierten automáticamente los movimientos registrados a partir de esta versión.
 
 ## Desarrollo local
 

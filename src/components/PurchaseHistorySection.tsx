@@ -20,6 +20,10 @@ type PurchaseItem = {
   reference_unit_price: number | null
   reference_unit: string | null
   notes: string | null
+  pantry_effect_applied: boolean
+  pantry_added_quantity: number | null
+  pantry_added_unit: string | null
+  pantry_status_changed: boolean
   ingredient: Ingredient | null
 }
 
@@ -99,6 +103,7 @@ export default function PurchaseHistorySection() {
   const [purchaseForm, setPurchaseForm] = useState<PurchaseForm | null>(null)
   const [itemForm, setItemForm] = useState<ItemForm | null>(null)
   const [saving, setSaving] = useState(false)
+  const [deletingPurchaseId, setDeletingPurchaseId] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     if (!supabase) return
@@ -132,6 +137,10 @@ export default function PurchaseHistorySection() {
             reference_unit_price,
             reference_unit,
             notes,
+            pantry_effect_applied,
+            pantry_added_quantity,
+            pantry_added_unit,
+            pantry_status_changed,
             ingredient:ingredients(id,name)
           )
         `)
@@ -256,10 +265,31 @@ export default function PurchaseHistorySection() {
   }
 
   async function deleteItem(item: PurchaseItem) {
-    if (!supabase || !window.confirm(`¿Eliminar “${item.raw_name}” de este ticket?`)) return
+    if (!supabase) return
+    const pantryMessage = item.pantry_effect_applied
+      ? ' También se revertirá lo que esta línea añadió a la despensa.'
+      : ''
+    if (!window.confirm(`¿Eliminar “${item.raw_name}” de este ticket?${pantryMessage}`)) return
     setError('')
-    const { error: deleteError } = await supabase.from('purchase_items').delete().eq('id', item.id)
+    const { error: deleteError } = await supabase.rpc('delete_purchase_item_and_reverse_pantry', { p_purchase_item_id: item.id })
     if (deleteError) { setError(deleteError.message); return }
+    await load()
+  }
+
+  async function deletePurchase(purchase: Purchase) {
+    if (!supabase) return
+    const affectedItems = purchase.purchase_items.filter((item) => item.pantry_effect_applied).length
+    const pantryMessage = affectedItems > 0
+      ? ` Se revertirá la aportación a despensa de ${affectedItems} ${affectedItems === 1 ? 'producto' : 'productos'}.`
+      : ' Este ticket no tiene movimientos de despensa reversibles registrados.'
+    if (!window.confirm(`¿Eliminar el ticket de ${purchase.store_name}? Esta acción no se puede deshacer.${pantryMessage}`)) return
+
+    setDeletingPurchaseId(purchase.id)
+    setError('')
+    const { error: deleteError } = await supabase.rpc('delete_purchase_and_reverse_pantry', { p_purchase_id: purchase.id })
+    setDeletingPurchaseId(null)
+    if (deleteError) { setError(deleteError.message); return }
+    if (openPurchase === purchase.id) setOpenPurchase(null)
     await load()
   }
 
@@ -306,8 +336,8 @@ export default function PurchaseHistorySection() {
                 </div>
 
                 {open && <div className="border-t border-neutral-100 px-5 pb-5"><div className="divide-y divide-neutral-100">
-                  {items.map((item) => <div key={item.id} className="flex items-start justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-medium text-neutral-800">{item.ingredient?.name ?? item.raw_name}</p><p className="mt-0.5 text-xs text-neutral-400">{item.raw_name}</p><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">{quantityLabel(item) && <span>{quantityLabel(item)}</span>}{item.reference_unit_price != null && item.reference_unit && <span>{money(Number(item.reference_unit_price))}/{item.reference_unit}</span>}{item.package_unit_price != null && Number(item.packages ?? 1) > 1 && <span>{Number(item.packages)} × {money(Number(item.package_unit_price))}</span>}</div></div><div className="flex shrink-0 items-center gap-2"><div className="text-right"><p className="text-sm font-semibold text-neutral-900">{money(Number(item.total_price))}</p>{Number(item.discount_amount) > 0 && <p className="text-xs text-emerald-700">Dto. {money(Number(item.discount_amount))}</p>}</div><button type="button" onClick={() => startItemEdit(purchase, item)} className="rounded-xl p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900" aria-label={`Editar ${item.raw_name}`}><Pencil size={16} /></button><button type="button" onClick={() => void deleteItem(item)} className="rounded-xl p-2 text-neutral-400 hover:bg-red-50 hover:text-red-600" aria-label={`Eliminar ${item.raw_name}`}><Trash2 size={16} /></button></div></div>)}
-                </div>{(purchase.payment_method || purchase.receipt_number || purchase.notes) && <div className="mt-3 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500">{purchase.payment_method && <p>Pago: {purchase.payment_method}</p>}{purchase.receipt_number && <p>Ticket: {purchase.receipt_number}</p>}{purchase.notes && <p>Notas: {purchase.notes}</p>}</div>}</div>}
+                  {items.map((item) => <div key={item.id} className="flex items-start justify-between gap-3 py-3"><div className="min-w-0"><p className="text-sm font-medium text-neutral-800">{item.ingredient?.name ?? item.raw_name}</p><p className="mt-0.5 text-xs text-neutral-400">{item.raw_name}</p><div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs text-neutral-500">{quantityLabel(item) && <span>{quantityLabel(item)}</span>}{item.reference_unit_price != null && item.reference_unit && <span>{money(Number(item.reference_unit_price))}/{item.reference_unit}</span>}{item.package_unit_price != null && Number(item.packages ?? 1) > 1 && <span>{Number(item.packages)} × {money(Number(item.package_unit_price))}</span>}{item.pantry_effect_applied && <span className="text-emerald-700">Añadido a despensa</span>}</div></div><div className="flex shrink-0 items-center gap-2"><div className="text-right"><p className="text-sm font-semibold text-neutral-900">{money(Number(item.total_price))}</p>{Number(item.discount_amount) > 0 && <p className="text-xs text-emerald-700">Dto. {money(Number(item.discount_amount))}</p>}</div><button type="button" onClick={() => startItemEdit(purchase, item)} className="rounded-xl p-2 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-900" aria-label={`Editar ${item.raw_name}`}><Pencil size={16} /></button><button type="button" onClick={() => void deleteItem(item)} className="rounded-xl p-2 text-neutral-400 hover:bg-red-50 hover:text-red-600" aria-label={`Eliminar ${item.raw_name}`}><Trash2 size={16} /></button></div></div>)}
+                </div>{(purchase.payment_method || purchase.receipt_number || purchase.notes) && <div className="mt-3 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500">{purchase.payment_method && <p>Pago: {purchase.payment_method}</p>}{purchase.receipt_number && <p>Ticket: {purchase.receipt_number}</p>}{purchase.notes && <p>Notas: {purchase.notes}</p>}</div>}<div className="mt-4 flex flex-col gap-3 rounded-2xl border border-red-100 bg-red-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-medium text-red-800">Eliminar ticket</p><p className="mt-1 text-xs leading-5 text-red-600">Se borrará del histórico y se revertirán los productos que este ticket añadió a la despensa.</p></div><button type="button" disabled={deletingPurchaseId === purchase.id} onClick={() => void deletePurchase(purchase)} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-red-600 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50"><Trash2 size={16} /> {deletingPurchaseId === purchase.id ? 'Eliminando…' : 'Eliminar ticket'}</button></div></div>}
               </section>
             )
           })}
