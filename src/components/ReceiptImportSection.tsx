@@ -1,7 +1,8 @@
 import { Camera, CheckCircle2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseReceiptText } from '../lib/receipt'
+import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseReceiptText, scoreReceiptText } from '../lib/receipt'
+import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -128,10 +129,29 @@ export default function ReceiptImportSection() {
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null
 
     try {
+      const variants = await buildReceiptImageVariants(file)
       worker = await createWorker('spa')
-      setProgress('Leyendo ticket…')
-      const result = await worker.recognize(file)
-      const text = result.data.text
+      await worker.setParameters({
+        tessedit_pageseg_mode: '6',
+        preserve_interword_spaces: '1',
+      } as never)
+
+      let bestText = ''
+      let bestScore = -Infinity
+
+      for (let index = 0; index < variants.length; index += 1) {
+        const variant = variants[index]
+        setProgress(`Leyendo ticket… ${index + 1}/${variants.length}`)
+        const result = await worker.recognize(variant.source)
+        const candidateText = result.data.text
+        const candidateScore = scoreReceiptText(candidateText, result.data.confidence)
+        if (candidateScore > bestScore) {
+          bestScore = candidateScore
+          bestText = candidateText
+        }
+      }
+
+      const text = bestText
       setLines(buildReviewLines(text))
       const total = extractReceiptTotal(text)
       const receiptDate = extractReceiptDate(text)
@@ -274,7 +294,7 @@ export default function ReceiptImportSection() {
       <LoaderCircle className="mx-auto animate-spin text-neutral-500" size={30} />
       <h2 className="mt-4 font-semibold">Leyendo el ticket</h2>
       <p className="mt-2 text-sm text-neutral-500">{progress || 'Procesando imagen…'}</p>
-      <p className="mt-1 text-xs text-neutral-400">La primera lectura puede tardar un poco mientras se carga el OCR.</p>
+      <p className="mt-1 text-xs text-neutral-400">Probamos varias versiones de la imagen y elegimos automáticamente la lectura más fiable.</p>
     </div>
   }
 
