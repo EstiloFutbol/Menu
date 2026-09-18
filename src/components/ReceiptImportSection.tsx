@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, ImagePlus, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
+import { Camera, CheckCircle2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
 import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseReceiptText } from '../lib/receipt'
@@ -52,8 +52,6 @@ export default function ReceiptImportSection() {
   const [storeName, setStoreName] = useState('')
   const [purchasedAt, setPurchasedAt] = useState(localDatetimeValue())
   const [totalAmount, setTotalAmount] = useState('')
-  const [imageUrl, setImageUrl] = useState<string | null>(null)
-  const [rawText, setRawText] = useState('')
   const [reading, setReading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState('')
@@ -127,16 +125,13 @@ export default function ReceiptImportSection() {
     setSuccess('')
     setReading(true)
     setProgress('Preparando imagen…')
-    if (imageUrl) URL.revokeObjectURL(imageUrl)
-    setImageUrl(URL.createObjectURL(file))
+    let worker: Awaited<ReturnType<typeof createWorker>> | null = null
 
     try {
-      const worker = await createWorker('spa')
+      worker = await createWorker('spa')
       setProgress('Leyendo ticket…')
       const result = await worker.recognize(file)
-      await worker.terminate()
       const text = result.data.text
-      setRawText(text)
       setLines(buildReviewLines(text))
       const total = extractReceiptTotal(text)
       const receiptDate = extractReceiptDate(text)
@@ -149,6 +144,7 @@ export default function ReceiptImportSection() {
       setError(cause instanceof Error ? cause.message : 'No se pudo leer el ticket.')
       setProgress('')
     } finally {
+      if (worker) await worker.terminate()
       setReading(false)
       event.target.value = ''
     }
@@ -186,9 +182,6 @@ export default function ReceiptImportSection() {
   }
 
   function reset() {
-    if (imageUrl) URL.revokeObjectURL(imageUrl)
-    setImageUrl(null)
-    setRawText('')
     setLines([])
     setStoreName('')
     setPurchasedAt(localDatetimeValue())
@@ -261,7 +254,7 @@ export default function ReceiptImportSection() {
         <div className="mx-auto max-w-xl text-center">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-neutral-100"><ReceiptText size={25} /></div>
           <h2 className="mt-4 text-xl font-semibold">Importar ticket</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-500">Haz una foto o elige una imagen. El ticket se lee en tu navegador y después podrás revisar cada producto antes de guardar nada.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-500">Haz una foto o elige una imagen. El ticket se procesa localmente en tu navegador y la imagen se descarta al terminar el OCR. Después podrás revisar cada producto antes de guardar nada.</p>
           <label className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">
             <Camera size={18} /> Hacer foto o elegir ticket
             <input type="file" accept="image/*" capture="environment" onChange={handleImage} className="hidden" />
@@ -331,8 +324,6 @@ export default function ReceiptImportSection() {
     </div>
 
     <button onClick={addManualLine} className="flex items-center gap-2 rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-medium text-neutral-600"><Plus size={17} /> Añadir línea manual</button>
-
-    {imageUrl && <details className="rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm"><summary className="cursor-pointer text-sm font-medium text-neutral-700">Ver imagen y texto OCR</summary><div className="mt-4 grid gap-4 lg:grid-cols-2"><img src={imageUrl} alt="Ticket importado" className="max-h-[520px] w-full rounded-2xl bg-neutral-50 object-contain" /><textarea value={rawText} onChange={(e) => setRawText(e.target.value)} rows={18} className="w-full rounded-2xl border border-neutral-200 p-3 font-mono text-xs text-neutral-600" /></div></details>}
 
     <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-3xl border border-neutral-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
       <div><p className="text-sm font-semibold">{selectedLines.filter((line) => line.addToPantry).length} productos irán a despensa</p><p className="mt-0.5 text-xs text-neutral-500">Las equivalencias corregidas se recordarán para próximos tickets.</p></div>
