@@ -63,6 +63,12 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Histórico de compras.
 - Tienda, fecha, total, descuentos y método de pago.
 - Detalle de líneas de compra, cantidades, precios y precio de referencia.
+- Importación de tickets desde foto con OCR ejecutado en el navegador.
+- Revisión obligatoria antes de guardar: tienda, fecha, total, conceptos, cantidades, unidades y precios.
+- “Traducción” de conceptos abreviados del ticket a alimentos del catálogo.
+- Memoria de equivalencias: las traducciones confirmadas se reutilizan en tickets posteriores.
+- Selección individual de qué productos se añaden a la despensa.
+- La importación registra también el ticket y sus líneas en el histórico de compras.
 
 ### Despensa
 
@@ -81,7 +87,7 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Ampliar cobertura de tests de lógica de negocio y operaciones de Supabase.
 - Seguir automatizando el flujo Menú → Compra → Despensa → Consumo.
 - Mejorar la generación y ajuste automático de la lista de compra.
-- Futuro: lectura de tickets mediante imagen para registrar compras automáticamente.
+- Mejorar progresivamente el reconocimiento de formatos de ticket y sugerencias de equivalencias.
 - Futuro: sugerencias de menú y recetas según despensa, preferencias, coste y nutrición.
 
 ## Stack
@@ -94,6 +100,7 @@ El objetivo del producto es conectar estas cuatro áreas:
 - PWA
 - GitHub Pages
 - Vitest
+- Tesseract.js para OCR local de tickets
 - GitHub Actions
 
 ## Estructura principal
@@ -122,6 +129,8 @@ Las tablas usan Row Level Security para aislar los datos de cada usuario.
 La migración incremental `20260904000100_repeat_consumption.sql` adapta una base existente para que cada receta planificada tenga identidad propia en el histórico de consumo. Esto permite repetir una misma receta varias veces dentro de una comida sin confundir los consumos anteriores.
 
 La migración `20260904000200_security_drift_fix.sql` alinea instalaciones existentes con la configuración de seguridad actual: las operaciones de consumo directo se ejecutan con los permisos del usuario autenticado y las funciones auxiliares fijan explícitamente su `search_path`.
+
+La migración `20260918000100_receipt_import.sql` añade las equivalencias de conceptos de ticket y la operación transaccional de importación revisada. La foto no se almacena: el OCR se ejecuta en el navegador y solo se guardan los datos que el usuario confirma.
 
 ## Desarrollo local
 
