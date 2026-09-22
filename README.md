@@ -85,6 +85,10 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Resumen rápido del inventario y productos con pocas existencias.
 - Agrupación por categorías.
 - Diseño compacto para lectura rápida tanto en escritorio como en móvil.
+- Vista interna de catálogo con todos los productos creados, aunque no tengan existencias.
+- Búsqueda por nombre, categoría o unidad habitual.
+- Creación y edición de productos desde Despensa.
+- Eliminación segura de productos no utilizados; si ya forman parte de recetas, menú, compras o consumos, se conserva el producto para proteger el histórico.
 - Notas opcionales.
 - Actualización automática al registrar consumos compatibles.
 
@@ -139,6 +143,8 @@ La migración `20260904000200_security_drift_fix.sql` alinea instalaciones exist
 La migración `20260918000100_receipt_import.sql` añade las equivalencias de conceptos de ticket y la operación transaccional de importación revisada. No existe ningún campo de base de datos destinado a imágenes de tickets. La foto solo se utiliza como entrada temporal del OCR en el navegador; al terminar se descarta y únicamente se guardan los datos estructurados que el usuario confirma.
 
 La migración `20260918000200_reversible_ticket_delete.sql` registra el efecto real de cada línea importada sobre la despensa y añade operaciones transaccionales para borrar líneas o tickets completos revirtiendo primero ese efecto. Los tickets importados antes de esta migración no tienen metadatos suficientes para reconstruir con seguridad un movimiento de despensa pasado, por lo que solo se revierten automáticamente los movimientos registrados a partir de esta versión.
+
+La migración `20260922000100_safe_product_delete.sql` añade el borrado seguro del catálogo de productos. Solo permite eliminar definitivamente productos que no estén referenciados por recetas, planificación, compras o consumos; antes de borrar elimina su posible fila de despensa y equivalencias de ticket.
 
 ## Desarrollo local
 
