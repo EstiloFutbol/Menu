@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, ShoppingBasket, Trash2 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { normalizeDecimalInput, parseDecimalInput } from '../lib/receipt'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -115,6 +116,7 @@ function ShoppingSection() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
   const [listId, setListId] = useState<string | null>(null)
   const [items, setItems] = useState<ShoppingItem[]>([])
+  const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [loading, setLoading] = useState(true)
   const [generating, setGenerating] = useState(false)
   const [addingToPantry, setAddingToPantry] = useState(false)
@@ -174,6 +176,18 @@ function ShoppingSection() {
   useEffect(() => {
     void loadList()
   }, [loadList])
+
+  useEffect(() => {
+    if (!supabase) return
+    void supabase
+      .from('ingredients')
+      .select('id,name,category,default_unit')
+      .order('name')
+      .then(({ data, error: ingredientsError }) => {
+        if (ingredientsError) setError(ingredientsError.message)
+        else setIngredients((data ?? []) as Ingredient[])
+      })
+  }, [])
 
   const ensureList = async () => {
     if (!supabase) return null
@@ -350,11 +364,38 @@ function ShoppingSection() {
     try {
       const id = await ensureList()
       if (!id) return
-      const quantity = manualQuantity.trim() ? Number(manualQuantity) : null
+
+      const { data: userData } = await supabase.auth.getUser()
+      const userId = userData.user?.id
+      if (!userId) throw new Error('No se ha encontrado la sesión de usuario.')
+
+      const normalizedName = manualName.trim().toLowerCase()
+      let ingredient = ingredients.find((candidate) => candidate.name.trim().toLowerCase() === normalizedName) ?? null
+
+      if (!ingredient) {
+        const { data: created, error: createError } = await supabase
+          .from('ingredients')
+          .insert({
+            user_id: userId,
+            name: manualName.trim(),
+            category: 'Otros',
+            default_unit: manualUnit,
+          })
+          .select('id,name,category,default_unit')
+          .single()
+
+        if (createError || !created) throw createError ?? new Error('No se pudo crear el producto.')
+        ingredient = created as Ingredient
+        setIngredients((current) => [...current, ingredient!].sort((a, b) => a.name.localeCompare(b.name, 'es')))
+      }
+
+      const quantity = manualQuantity.trim() ? parseDecimalInput(manualQuantity) : null
+      if (manualQuantity.trim() && (quantity == null || quantity < 0)) throw new Error('Indica una cantidad válida.')
+
       const { error: insertError } = await supabase.from('shopping_items').insert({
         shopping_list_id: id,
-        manual_name: manualName.trim(),
-        ingredient_id: null,
+        manual_name: null,
+        ingredient_id: ingredient.id,
         quantity,
         unit: quantity == null ? null : manualUnit,
         pantry_check_required: false,
@@ -488,11 +529,27 @@ function ShoppingSection() {
       </div>
 
       {showManual && (
-        <form onSubmit={addManualItem} className="grid gap-3 rounded-3xl border border-neutral-200 bg-white p-4 sm:grid-cols-[minmax(0,1fr)_120px_130px_auto]">
-          <input value={manualName} onChange={(event) => setManualName(event.target.value)} placeholder="Producto manual" required className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
-          <input type="number" min="0" step="0.01" value={manualQuantity} onChange={(event) => setManualQuantity(event.target.value)} placeholder="Cantidad" className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
-          <select value={manualUnit} onChange={(event) => setManualUnit(event.target.value as Unit)} className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400">{units.map((unit) => <option key={unit}>{unit}</option>)}</select>
-          <button className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">Añadir</button>
+        <form onSubmit={addManualItem} className="rounded-3xl border border-neutral-200 bg-white p-4">
+          <datalist id="shopping-products">{ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.name} />)}</datalist>
+          <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_120px_130px_auto]">
+            <input
+              list="shopping-products"
+              value={manualName}
+              onChange={(event) => {
+                const value = event.target.value
+                setManualName(value)
+                const match = ingredients.find((ingredient) => ingredient.name.trim().toLowerCase() === value.trim().toLowerCase())
+                if (match?.default_unit) setManualUnit(match.default_unit)
+              }}
+              placeholder="Buscar o escribir un producto nuevo"
+              required
+              className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400"
+            />
+            <input type="text" inputMode="decimal" value={manualQuantity} onChange={(event) => setManualQuantity(normalizeDecimalInput(event.target.value))} placeholder="Cantidad" className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
+            <select value={manualUnit} onChange={(event) => setManualUnit(event.target.value as Unit)} className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400">{units.map((unit) => <option key={unit}>{unit}</option>)}</select>
+            <button className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">Añadir</button>
+          </div>
+          <p className="mt-2 text-xs text-neutral-400">Selecciona un producto existente o escribe uno nuevo. Si no existe, se creará automáticamente en el catálogo con la unidad elegida y categoría “Otros”.</p>
         </form>
       )}
 
