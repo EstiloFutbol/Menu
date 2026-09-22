@@ -189,7 +189,7 @@ export default function ReceiptImportSection() {
 
   function blankLine(index: number): ReviewLine {
     return {
-      id: lineId(current.length),
+      id: lineId(index),
       rawName: '',
       translatedName: '',
       ingredientId: '',
