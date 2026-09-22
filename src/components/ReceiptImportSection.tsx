@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
+import { Camera, CheckCircle2, FilePlus2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
 import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeDecimalInput, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
@@ -58,6 +58,7 @@ export default function ReceiptImportSection() {
   const [progress, setProgress] = useState('')
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
+  const [sourceMode, setSourceMode] = useState<'ocr' | 'manual' | null>(null)
 
   const loadReferenceData = useCallback(async () => {
     if (!supabase) return
@@ -124,6 +125,7 @@ export default function ReceiptImportSection() {
     if (!file) return
     setError('')
     setSuccess('')
+    setSourceMode('ocr')
     setReading(true)
     setProgress('Preparando imagen…')
     let worker: Awaited<ReturnType<typeof createWorker>> | null = null
@@ -185,9 +187,9 @@ export default function ReceiptImportSection() {
     })
   }
 
-  function addManualLine() {
-    setLines((current) => [...current, {
-      id: lineId(current.length),
+  function blankLine(index: number): ReviewLine {
+    return {
+      id: lineId(index),
       rawName: '',
       translatedName: '',
       ingredientId: '',
@@ -198,7 +200,22 @@ export default function ReceiptImportSection() {
       include: true,
       addToPantry: true,
       matchedByAlias: false,
-    }])
+    }
+  }
+
+  function addManualLine() {
+    setLines((current) => [...current, blankLine(current.length)])
+  }
+
+  function startEmptyTicket() {
+    setStoreName('')
+    setPurchasedAt(localDatetimeValue())
+    setTotalAmount('')
+    setError('')
+    setSuccess('')
+    setProgress('')
+    setSourceMode('manual')
+    setLines([blankLine(0)])
   }
 
   function reset() {
@@ -209,6 +226,7 @@ export default function ReceiptImportSection() {
     setError('')
     setSuccess('')
     setProgress('')
+    setSourceMode(null)
   }
 
   const selectedLines = lines.filter((line) => line.include)
@@ -279,11 +297,16 @@ export default function ReceiptImportSection() {
         <div className="mx-auto max-w-xl text-center">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-neutral-100"><ReceiptText size={25} /></div>
           <h2 className="mt-4 text-xl font-semibold">Importar ticket</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-500">Haz una foto o elige una imagen. El ticket se procesa localmente en tu navegador y la imagen se descarta al terminar el OCR. Después podrás revisar cada producto antes de guardar nada.</p>
-          <label className="mt-6 inline-flex cursor-pointer items-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">
-            <Camera size={18} /> Hacer foto o elegir ticket
-            <input type="file" accept="image/*" capture="environment" onChange={handleImage} className="hidden" />
-          </label>
+          <p className="mt-2 text-sm leading-6 text-neutral-500">Puedes leer un ticket desde una foto o crear uno vacío y rellenarlo manualmente. En ambos casos revisarás todos los productos antes de guardar.</p>
+          <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">
+              <Camera size={18} /> Hacer foto o elegir ticket
+              <input type="file" accept="image/*" capture="environment" onChange={handleImage} className="hidden" />
+            </label>
+            <button type="button" onClick={startEmptyTicket} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-sm font-semibold text-neutral-700">
+              <FilePlus2 size={18} /> Crear ticket vacío
+            </button>
+          </div>
           <div className="mt-5 grid gap-2 text-left text-xs text-neutral-500 sm:grid-cols-3">
             <div className="rounded-2xl bg-neutral-50 p-3"><span className="font-semibold text-neutral-700">1. Leer</span><p className="mt-1">Extrae los conceptos y precios visibles.</p></div>
             <div className="rounded-2xl bg-neutral-50 p-3"><span className="font-semibold text-neutral-700">2. Traducir</span><p className="mt-1">Corrige abreviaturas y asocia alimentos.</p></div>
@@ -305,7 +328,7 @@ export default function ReceiptImportSection() {
 
   return <div className="space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="text-sm font-medium text-neutral-500">Ticket leído</p><h2 className="mt-1 text-2xl font-semibold">Revisar antes de importar</h2><p className="mt-1 text-sm text-neutral-500">Corrige todo lo que necesites. Nada se guarda hasta confirmar.</p></div>
+      <div><p className="text-sm font-medium text-neutral-500">{sourceMode === 'manual' ? 'Ticket manual' : 'Ticket leído'}</p><h2 className="mt-1 text-2xl font-semibold">{sourceMode === 'manual' ? 'Crear ticket' : 'Revisar antes de importar'}</h2><p className="mt-1 text-sm text-neutral-500">{sourceMode === 'manual' ? 'Añade los productos uno a uno y revisa cantidades, unidades y precios antes de guardar.' : 'Corrige todo lo que necesites. Nada se guarda hasta confirmar.'}</p></div>
       <button onClick={reset} className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600"><RotateCcw size={16} /> Otro ticket</button>
     </div>
 
@@ -330,8 +353,23 @@ export default function ReceiptImportSection() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Línea {index + 1}</span>{line.matchedByAlias && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Traducción recordada</span>}</div>
               <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_110px_120px_120px]">
-                <label className="text-xs font-medium text-neutral-500">Concepto del ticket<input value={line.rawName} onChange={(e) => updateLine(line.id, { rawName: e.target.value, matchedByAlias: false })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
-                <label className="text-xs font-medium text-neutral-500">Qué es realmente<input list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
+                <label className="text-xs font-medium text-neutral-500">{sourceMode === 'manual' ? 'Producto' : 'Concepto del ticket'}<input list={sourceMode === 'manual' ? 'receipt-ingredients' : undefined} value={line.rawName} onChange={(e) => {
+                  const value = e.target.value
+                  if (sourceMode === 'manual') {
+                    const ingredient = ingredientsByNormalized.get(normalizeReceiptName(value))
+                    updateLine(line.id, {
+                      rawName: value,
+                      translatedName: ingredient?.name ?? value,
+                      ingredientId: ingredient?.id ?? '',
+                      category: ingredient?.category ?? line.category,
+                      unit: ingredient?.default_unit ?? line.unit,
+                      matchedByAlias: false,
+                    })
+                  } else {
+                    updateLine(line.id, { rawName: value, matchedByAlias: false })
+                  }
+                }} placeholder={sourceMode === 'manual' ? 'Buscar o escribir producto' : undefined} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
+                {sourceMode === 'manual' ? <label className="text-xs font-medium text-neutral-500">Producto del catálogo<input value={line.translatedName} readOnly className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-600" /></label> : <label className="text-xs font-medium text-neutral-500">Qué es realmente<input list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>}
                 <label className="text-xs font-medium text-neutral-500">Cantidad<input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateLine(line.id, { quantity: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
                 <label className="text-xs font-medium text-neutral-500">Unidad<select value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value as Unit })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
                 <label className="text-xs font-medium text-neutral-500">Precio línea<input type="text" inputMode="decimal" value={line.totalPrice} onChange={(e) => updateLine(line.id, { totalPrice: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>

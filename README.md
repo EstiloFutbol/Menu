@@ -57,13 +57,15 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Lista de compra generada a partir de necesidades planificadas.
 - Descuento de existencias conocidas de la despensa.
 - Aviso cuando un producto requiere revisión manual de despensa.
-- Productos manuales.
+- Productos manuales con autocompletado desde el catálogo.
+- Si se escribe un producto nuevo al añadirlo manualmente, se crea automáticamente en el catálogo y queda vinculado a la lista.
 - Confirmación de productos comprados.
 - Opción de incorporar compras a la despensa.
 - Histórico de compras.
 - Tienda, fecha, total, descuentos y método de pago.
 - Detalle de líneas de compra, cantidades, precios y precio de referencia.
 - Importación de tickets desde foto con OCR ejecutado en el navegador.
+- Creación de tickets vacíos para introducir manualmente tienda, fecha, total y líneas de producto.
 - Preprocesado local de la imagen (reescalado, contraste y binarización) y OCR multipase.
 - Selección automática de la lectura con más productos válidos, total/fecha detectados y mejor confianza.
 - La imagen del ticket no se almacena ni en Supabase ni en la aplicación: se usa únicamente durante el OCR y se descarta inmediatamente después.
