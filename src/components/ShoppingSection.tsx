@@ -226,6 +226,7 @@ function ShoppingSection() {
           id,
           is_eating_out,
           menu_entry_recipes(
+            id,
             servings,
             recipe:recipes(
               id,
@@ -238,10 +239,12 @@ function ShoppingSection() {
             )
           ),
           menu_entry_products(
+            id,
             quantity,
             unit,
             ingredient:ingredients(id,name,category,default_unit)
-          )
+          ),
+          consumption_logs(menu_entry_recipe_id,menu_entry_product_id)
         `)
         .gte('planned_date', start)
         .lte('planned_date', end)
@@ -270,7 +273,12 @@ function ShoppingSection() {
       }
 
       for (const entry of (menuData ?? []) as any[]) {
+        // Lo ya consumido se descontó de la despensa al completarlo, así que no se vuelve a contar.
+        const consumedRecipeRows = new Set((entry.consumption_logs ?? []).map((log: any) => log.menu_entry_recipe_id).filter(Boolean))
+        const consumedProductRows = new Set((entry.consumption_logs ?? []).map((log: any) => log.menu_entry_product_id).filter(Boolean))
+
         for (const menuRecipe of entry.menu_entry_recipes ?? []) {
+          if (consumedRecipeRows.has(menuRecipe.id)) continue
           const recipe = menuRecipe.recipe
           if (!recipe || !Number(recipe.base_servings)) continue
           const scale = Number(menuRecipe.servings) / Number(recipe.base_servings)
@@ -284,6 +292,7 @@ function ShoppingSection() {
 
         // Los productos directos del menú se tratan igual que los ingredientes de receta.
         for (const menuProduct of entry.menu_entry_products ?? []) {
+          if (consumedProductRows.has(menuProduct.id)) continue
           const ingredient = menuProduct.ingredient as Ingredient | null
           if (!ingredient) continue
           addRequired(ingredient, Number(menuProduct.quantity), menuProduct.unit as Unit)
