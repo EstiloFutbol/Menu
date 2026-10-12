@@ -147,7 +147,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
           <div>
             <p className="text-sm font-medium text-neutral-500">Confirmar consumo</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{recipeName}</h2>
-            <p className="mt-1 text-sm text-neutral-500">{formatQuantity(servings, 3)} {servings === 1 ? 'ración' : 'raciones'}</p>
+            <p className="mt-1 text-sm text-neutral-500">{formatQuantity(servings)} {servings === 1 ? 'ración' : 'raciones'}</p>
           </div>
           <button disabled={saving} onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar">
             <X size={19} />
@@ -178,7 +178,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
                         {!item.pantry
                           ? 'No está en despensa'
                           : exact
-                            ? `Despensa: ${formatQuantity(Number(item.pantry.quantity), 3)} ${item.pantry.unit}`
+                            ? `Despensa: ${formatQuantity(Number(item.pantry.quantity))} ${item.pantry.unit}`
                             : `Despensa: ${item.pantry.status === 'queda_poco' ? 'Queda poco' : item.pantry.status === 'no_tengo' ? 'No tengo' : 'Tengo'}`}
                       </p>
                     </div>

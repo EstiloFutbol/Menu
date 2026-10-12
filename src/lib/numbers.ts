@@ -1,6 +1,6 @@
 // Reglas de los campos numéricos de la app. Todos aceptan coma o punto como
 // separador decimal y se guardan internamente con punto.
-export type NumberKind = 'quantity' | 'servings' | 'money' | 'referencePrice' | 'minutes' | 'packages' | 'nutrition'
+export type NumberKind = 'quantity' | 'servings' | 'money' | 'minutes' | 'packages' | 'nutrition'
 
 type NumberRule = { decimals: number; min: number; allowMin: boolean }
 
@@ -8,7 +8,6 @@ export const numberRules: Record<NumberKind, NumberRule> = {
   quantity: { decimals: 2, min: 0, allowMin: false },
   servings: { decimals: 2, min: 0, allowMin: false },
   money: { decimals: 2, min: 0, allowMin: true },
-  referencePrice: { decimals: 3, min: 0, allowMin: true },
   minutes: { decimals: 0, min: 0, allowMin: true },
   packages: { decimals: 0, min: 0, allowMin: false },
   nutrition: { decimals: 1, min: 0, allowMin: true },
