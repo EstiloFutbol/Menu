@@ -1,5 +1,6 @@
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, ShoppingBasket, Trash2 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { aggregateNeeds, compareNeedWithPantry, pendingPlannedLines, type PlanEntryForNeeds } from '../lib/domain'
 import { normalizeDecimalInput, parseDecimalInput } from '../lib/receipt'
 import { supabase } from '../lib/supabase'
 
@@ -32,13 +33,6 @@ type PantryItem = {
   quantity: number | null
   unit: Unit | null
   status: 'tengo' | 'queda_poco' | 'no_tengo' | null
-}
-
-type RequiredItem = {
-  ingredient: Ingredient
-  quantityBase: number
-  baseUnit: Unit
-  pantryCheckRequired: boolean
 }
 
 const categoryOrder = [
@@ -232,17 +226,17 @@ function ShoppingSection() {
               id,
               base_servings,
               recipe_ingredients(
+                ingredient_id,
                 quantity,
-                unit,
-                ingredient:ingredients(id,name,category,default_unit)
+                unit
               )
             )
           ),
           menu_entry_products(
             id,
+            ingredient_id,
             quantity,
-            unit,
-            ingredient:ingredients(id,name,category,default_unit)
+            unit
           ),
           consumption_logs(menu_entry_recipe_id,menu_entry_product_id)
         `)
@@ -259,45 +253,7 @@ function ShoppingSection() {
       if (pantryError) throw pantryError
       const pantry = (pantryData ?? []) as PantryItem[]
       const pantryByIngredient = new Map(pantry.map((item) => [item.ingredient_id, item]))
-      const required = new Map<string, RequiredItem>()
-      const addRequired = (ingredient: Ingredient, quantity: number, unit: Unit) => {
-        const normalized = toBase(quantity, unit)
-        const key = `${ingredient.id}:${normalized.unit}`
-        const current = required.get(key)
-        required.set(key, {
-          ingredient,
-          baseUnit: normalized.unit,
-          quantityBase: (current?.quantityBase ?? 0) + normalized.quantity,
-          pantryCheckRequired: current?.pantryCheckRequired ?? false,
-        })
-      }
-
-      for (const entry of (menuData ?? []) as any[]) {
-        // Lo ya consumido se descontó de la despensa al completarlo, así que no se vuelve a contar.
-        const consumedRecipeRows = new Set((entry.consumption_logs ?? []).map((log: any) => log.menu_entry_recipe_id).filter(Boolean))
-        const consumedProductRows = new Set((entry.consumption_logs ?? []).map((log: any) => log.menu_entry_product_id).filter(Boolean))
-
-        for (const menuRecipe of entry.menu_entry_recipes ?? []) {
-          if (consumedRecipeRows.has(menuRecipe.id)) continue
-          const recipe = menuRecipe.recipe
-          if (!recipe || !Number(recipe.base_servings)) continue
-          const scale = Number(menuRecipe.servings) / Number(recipe.base_servings)
-
-          for (const recipeIngredient of recipe.recipe_ingredients ?? []) {
-            const ingredient = recipeIngredient.ingredient as Ingredient | null
-            if (!ingredient) continue
-            addRequired(ingredient, Number(recipeIngredient.quantity) * scale, recipeIngredient.unit as Unit)
-          }
-        }
-
-        // Los productos directos del menú se tratan igual que los ingredientes de receta.
-        for (const menuProduct of entry.menu_entry_products ?? []) {
-          if (consumedProductRows.has(menuProduct.id)) continue
-          const ingredient = menuProduct.ingredient as Ingredient | null
-          if (!ingredient) continue
-          addRequired(ingredient, Number(menuProduct.quantity), menuProduct.unit as Unit)
-        }
-      }
+      const needs = aggregateNeeds(pendingPlannedLines((menuData ?? []) as unknown as PlanEntryForNeeds[]))
 
       // Lo que se conserva al regenerar (manuales y comprados que aún no están en despensa) ya cubre
       // parte de lo necesario, así que se descuenta para no duplicarlo. Lo ya añadido a la despensa
@@ -318,36 +274,22 @@ function ShoppingSection() {
         pantry_check_required: boolean
       }> = []
 
-      for (const value of required.values()) {
-        let quantityNeeded = value.quantityBase
-        let pantryCheckRequired = false
-        const pantryItem = pantryByIngredient.get(value.ingredient.id)
+      for (const need of needs) {
+        const comparison = compareNeedWithPantry(need, pantryByIngredient.get(need.ingredientId))
+        let quantityNeeded = comparison.missing
 
-        if (pantryItem) {
-          if (pantryItem.quantity != null && pantryItem.unit) {
-            if (areCompatible(pantryItem.unit, value.baseUnit)) {
-              const pantryInBase = toBase(Number(pantryItem.quantity), pantryItem.unit)
-              quantityNeeded = Math.max(0, quantityNeeded - pantryInBase.quantity)
-            } else {
-              pantryCheckRequired = true
-            }
-          } else if (pantryItem.status === 'tengo' || pantryItem.status === 'queda_poco') {
-            pantryCheckRequired = true
-          }
-        }
-
-        for (const kept of keptByIngredient.get(value.ingredient.id) ?? []) {
-          if (!areCompatible(kept.unit, value.baseUnit)) continue
+        for (const kept of keptByIngredient.get(need.ingredientId) ?? []) {
+          if (!areCompatible(kept.unit, need.baseUnit)) continue
           quantityNeeded = Math.max(0, quantityNeeded - toBase(kept.quantity, kept.unit).quantity)
         }
 
         if (quantityNeeded <= 0) continue
-        const display = fromBase(quantityNeeded, value.baseUnit)
+        const display = fromBase(quantityNeeded, need.baseUnit)
         generatedRows.push({
-          ingredient_id: value.ingredient.id,
+          ingredient_id: need.ingredientId,
           quantity: display.quantity,
           unit: display.unit,
-          pantry_check_required: pantryCheckRequired,
+          pantry_check_required: comparison.pantryCheckRequired,
         })
       }
 
