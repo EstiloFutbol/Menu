@@ -2,7 +2,8 @@ import { Camera, CheckCircle2, FilePlus2, FileText, LoaderCircle, Plus, ReceiptT
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
 import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
-import { isMercadonaReceipt, parseMercadonaReceipt } from '../lib/mercadona'
+import { mergeReceiptReadings } from '../lib/receipt-merge'
+import { parseStoreReceipt, type ParsedStoreReceipt } from '../lib/store-receipts'
 import { numberToInputValue } from '../lib/numbers'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { convertCompatibleQuantity } from '../lib/domain'
@@ -140,29 +141,19 @@ export default function ReceiptImportSection() {
         preserve_interword_spaces: '1',
       } as never)
 
-      let bestText = ''
-      let bestScore = -Infinity
+      const readings: { text: string; score: number }[] = []
 
       for (let index = 0; index < variants.length; index += 1) {
         const variant = variants[index]
         setProgress(`Leyendo ticket… ${index + 1}/${variants.length}`)
         const result = await worker.recognize(variant.source)
         const candidateText = result.data.text
-        const candidateScore = scoreReceiptText(candidateText, result.data.confidence)
-        if (candidateScore > bestScore) {
-          bestScore = candidateScore
-          bestText = candidateText
-        }
+        readings.push({ text: candidateText, score: scoreReceiptText(candidateText, result.data.confidence) })
       }
 
-      const text = bestText
-      setLines(buildReviewLines(parseReceiptText(text)))
-      const total = extractReceiptTotal(text)
-      const receiptDate = extractReceiptDate(text)
-      const store = guessStoreName(text)
-      if (total != null) setTotalAmount(String(total))
-      if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
-      if (store) setStoreName(store)
+      // Cada versión de la imagen acierta en líneas distintas, así que se combinan
+      // todas las lecturas, empezando por la que mejor puntúa.
+      applyReceiptText(readings.sort((a, b) => b.score - a.score).map((reading) => reading.text))
       setProgress('')
     } catch (cause) {
       setError(friendlyError(cause, 'No se pudo leer el ticket.'))
@@ -172,6 +163,30 @@ export default function ReceiptImportSection() {
       setReading(false)
       event.target.value = ''
     }
+  }
+
+  // Rellena la revisión a partir de una o varias lecturas del mismo ticket (las
+  // versiones de una foto, o el texto de un PDF). Si se reconoce la tienda
+  // (Mercadona, Aldi, Consum) se usa su lector; si no, el genérico.
+  function applyReceiptText(texts: string[]) {
+    const storeReadings = texts.map(parseStoreReceipt).filter((receipt): receipt is ParsedStoreReceipt => receipt !== null)
+    if (storeReadings.length) {
+      const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
+      const date = storeReadings.find((receipt) => receipt.date)?.date ?? null
+      setLines(buildReviewLines(mergeReceiptReadings(storeReadings.map((receipt) => receipt.lines), total)))
+      setStoreName(storeReadings[0].store)
+      if (total != null) setTotalAmount(String(total))
+      if (date) setPurchasedAt(localDatetimeValue(date))
+      return
+    }
+
+    const total = texts.map(extractReceiptTotal).find((value) => value != null) ?? null
+    const receiptDate = texts.map(extractReceiptDate).find(Boolean)
+    const store = texts.map(guessStoreName).find(Boolean)
+    setLines(buildReviewLines(mergeReceiptReadings(texts.map(parseReceiptText), total)))
+    if (total != null) setTotalAmount(String(total))
+    if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
+    if (store) setStoreName(store)
   }
 
   // Ticket digital en PDF (por ejemplo, el que Mercadona envía por correo). El
@@ -190,21 +205,7 @@ export default function ReceiptImportSection() {
       const text = await extractPdfText(file)
       if (!text.trim()) throw new Error('El PDF no contiene texto. Si es un ticket escaneado, usa la opción de foto.')
 
-      if (isMercadonaReceipt(text)) {
-        const receipt = parseMercadonaReceipt(text)
-        setLines(buildReviewLines(receipt.lines))
-        setStoreName(receipt.store)
-        if (receipt.total != null) setTotalAmount(String(receipt.total))
-        if (receipt.date) setPurchasedAt(localDatetimeValue(receipt.date))
-      } else {
-        setLines(buildReviewLines(parseReceiptText(text)))
-        const total = extractReceiptTotal(text)
-        const receiptDate = extractReceiptDate(text)
-        const store = guessStoreName(text)
-        if (total != null) setTotalAmount(String(total))
-        if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
-        if (store) setStoreName(store)
-      }
+      applyReceiptText([text])
       setProgress('')
     } catch (cause) {
       setError(friendlyError(cause, 'No se pudo leer el PDF.'))
@@ -274,6 +275,9 @@ export default function ReceiptImportSection() {
 
   const selectedLines = lines.filter((line) => line.include)
   const detectedTotal = selectedLines.reduce((sum, line) => sum + (parseDecimalInput(line.totalPrice) ?? 0), 0)
+  // Diferencia entre el total del ticket y la suma de las líneas (positiva si faltan líneas).
+  const parsedTotal = totalAmount.trim() ? parseDecimalInput(totalAmount) : null
+  const totalMismatch = parsedTotal != null && Math.abs(parsedTotal - detectedTotal) >= 0.01 ? Math.round((parsedTotal - detectedTotal) * 100) / 100 : null
 
   function pantryHint(line: ReviewLine) {
     if (!line.ingredientId || !line.addToPantry) return null
@@ -386,7 +390,7 @@ export default function ReceiptImportSection() {
       <label className="text-sm font-medium text-neutral-700">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span></div>
+      <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span>{totalMismatch != null && <span className="w-full font-medium text-amber-700">La suma de las líneas no coincide con el total del ticket ({totalMismatch > 0 ? 'faltan' : 'sobran'} {Math.abs(totalMismatch).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}). Revisa si falta algún producto o hay un precio mal leído.</span>}</div>
     </section>
 
     <datalist id="receipt-ingredients">{ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.name} />)}</datalist>
