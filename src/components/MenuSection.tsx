@@ -238,7 +238,7 @@ export default function MenuSection() {
   const renderShortfall = (item: SlotDraftProduct) => {
     const shortfall = pantryShortfall(item, pantryByIngredient.get(item.ingredientId))
     if (!shortfall) return null
-    return <p className="col-span-full flex items-center gap-1.5 text-xs text-amber-700"><AlertTriangle size={13} className="shrink-0" /> Tienes {formatQuantity(shortfall.have)} {shortfall.unit}; faltarían {formatQuantity(shortfall.missing)} {shortfall.unit}.</p>
+    return <p className="col-span-full flex items-center gap-1.5 text-xs text-amber-700"><AlertTriangle size={13} className="shrink-0" /> Tienes {formatQuantity(shortfall.have)} {shortfall.unit}; faltarían {formatQuantity(shortfall.missing)} {shortfall.unit}, que irán a la lista de la compra.</p>
   }
 
   const draftEntry = draft ? entriesBySlot.get(slotKey(draft.date, draft.meal)) : undefined
