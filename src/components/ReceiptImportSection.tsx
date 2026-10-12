@@ -56,6 +56,9 @@ export default function ReceiptImportSection() {
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
   const [sourceMode, setSourceMode] = useState<'ocr' | 'manual' | null>(null)
+  // Texto que ha sacado el OCR o el PDF, para poder revisarlo o enviarlo si la lectura falla.
+  const [readTexts, setReadTexts] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
 
   const loadReferenceData = useCallback(async () => {
     if (!supabase) return
@@ -169,6 +172,8 @@ export default function ReceiptImportSection() {
   // versiones de una foto, o el texto de un PDF). Si se reconoce la tienda
   // (Mercadona, Aldi, Consum) se usa su lector; si no, el genérico.
   function applyReceiptText(texts: string[]) {
+    setReadTexts(texts)
+    setCopied(false)
     const storeReadings = texts.map(parseStoreReceipt).filter((receipt): receipt is ParsedStoreReceipt => receipt !== null)
     if (storeReadings.length) {
       const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
@@ -259,6 +264,7 @@ export default function ReceiptImportSection() {
     setSuccess('')
     setProgress('')
     setSourceMode('manual')
+    setReadTexts([])
     setLines([blankLine(0)])
   }
 
@@ -271,6 +277,17 @@ export default function ReceiptImportSection() {
     setSuccess('')
     setProgress('')
     setSourceMode(null)
+    setReadTexts([])
+  }
+
+  async function copyReadText() {
+    const text = readTexts.map((reading, index) => readTexts.length > 1 ? `--- Lectura ${index + 1} ---\n${reading}` : reading).join('\n\n')
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+    } catch {
+      setError('No se pudo copiar. Selecciona el texto y cópialo a mano.')
+    }
   }
 
   const selectedLines = lines.filter((line) => line.include)
@@ -392,6 +409,13 @@ export default function ReceiptImportSection() {
       <label className="text-sm font-medium text-neutral-700">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span>{totalMismatch != null && <span className="w-full font-medium text-amber-700">La suma de las líneas no coincide con el total del ticket ({totalMismatch > 0 ? 'faltan' : 'sobran'} {Math.abs(totalMismatch).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}). Revisa si falta algún producto o hay un precio mal leído.</span>}</div>
     </section>
+
+    {readTexts.length > 0 && <details className="rounded-3xl border border-neutral-200 bg-white px-5 py-4 text-sm shadow-sm">
+      <summary className="cursor-pointer font-medium text-neutral-700">Ver texto leído</summary>
+      <p className="mt-2 text-xs text-neutral-500">Es lo que la app ha leído del ticket{readTexts.length > 1 ? `, una vez por cada versión de la imagen` : ''}. Si algo sale mal, cópialo y envíalo para mejorar la lectura.</p>
+      <button type="button" onClick={() => void copyReadText()} className="mt-3 rounded-xl border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-700">{copied ? 'Copiado' : 'Copiar texto'}</button>
+      {readTexts.map((reading, index) => <pre key={index} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl bg-neutral-50 p-3 text-xs text-neutral-600">{reading}</pre>)}
+    </details>}
 
     <datalist id="receipt-ingredients">{ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.name} />)}</datalist>
 
