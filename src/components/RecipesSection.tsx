@@ -328,19 +328,15 @@ export default function RecipesSection() {
     if (!form.name.trim()) return setError('La receta necesita un nombre.')
     if (Number(form.servings) <= 0) return setError('Las raciones deben ser mayores que cero.')
     if (form.ingredients.some((item) => !item.name.trim() || Number(item.quantity) <= 0)) return setError('Revisa los ingredientes y sus cantidades.')
+    const ingredientKeys = form.ingredients.map((item) => `${item.ingredientId || item.name.trim().toLocaleLowerCase('es')}:${item.unit}`)
+    const repeated = form.ingredients.find((_, index) => ingredientKeys.indexOf(ingredientKeys[index]) !== index)
+    if (repeated) return setError(`“${repeated.name.trim()}” aparece dos veces con la misma unidad. Júntalo en una sola línea.`)
 
     setSaving(true)
     setError(null)
 
-    const { data: userData, error: userError } = await supabase.auth.getUser()
-    if (userError || !userData.user) {
-      setError('No se ha podido identificar tu sesión.')
-      setSaving(false)
-      return
-    }
-
-    const payload = {
-      user_id: userData.user.id,
+    // Todo se guarda en una sola transacción (función save_recipe): si algo falla, la receta queda como estaba.
+    const recipe = {
       name: form.name.trim(),
       description: form.description.trim() || null,
       preparation_minutes: numberOrNull(form.preparationMinutes),
@@ -352,66 +348,26 @@ export default function RecipesSection() {
       fat_g_per_serving: numberOrNull(form.fat),
       sugar_g_per_serving: numberOrNull(form.sugar),
     }
+    const ingredientRows = form.ingredients.map((item) => ({
+      ingredient_id: item.ingredientId || null,
+      name: item.name.trim(),
+      category: item.category || 'Otros',
+      quantity: Number(item.quantity),
+      unit: item.unit,
+      notes: item.notes.trim() || null,
+    }))
+    const steps = form.steps.map((step) => step.trim()).filter(Boolean)
 
-    let recipeId = editingId
-    if (editingId) {
-      const { error: updateError } = await supabase.from('recipes').update(payload).eq('id', editingId)
-      if (updateError) return finishWithError(friendlyError(updateError, 'No se pudo guardar la receta.', { duplicate: 'Ya existe una receta con ese nombre.' }))
-      const { error: deleteIngredientsError } = await supabase.from('recipe_ingredients').delete().eq('recipe_id', editingId)
-      if (deleteIngredientsError) return finishWithError(friendlyError(deleteIngredientsError, 'No se pudo guardar la receta.'))
-      const { error: deleteStepsError } = await supabase.from('recipe_steps').delete().eq('recipe_id', editingId)
-      if (deleteStepsError) return finishWithError(friendlyError(deleteStepsError, 'No se pudo guardar la receta.'))
-    } else {
-      const { data, error: insertError } = await supabase.from('recipes').insert(payload).select('id').single()
-      if (insertError || !data) return finishWithError(friendlyError(insertError, 'No se pudo crear la receta.', { duplicate: 'Ya existe una receta con ese nombre.' }))
-      recipeId = data.id
-    }
-
-    const resolvedIngredientRows: Array<{ ingredient_id: string; quantity: number; unit: Unit; notes: string | null; sort_order: number }> = []
-    for (let index = 0; index < form.ingredients.length; index += 1) {
-      const item = form.ingredients[index]
-      let ingredientId = item.ingredientId
-      if (!ingredientId) {
-        const existing = ingredients.find((ingredient) => ingredient.name.toLocaleLowerCase('es') === item.name.trim().toLocaleLowerCase('es'))
-        if (existing) {
-          ingredientId = existing.id
-        } else {
-          const { data, error: ingredientError } = await supabase
-            .from('ingredients')
-            .insert({
-              user_id: userData.user.id,
-              name: item.name.trim(),
-              category: item.category || 'Otros',
-              default_unit: item.unit,
-            })
-            .select('id')
-            .single()
-          if (ingredientError || !data) return finishWithError(friendlyError(ingredientError, `No se pudo crear ${item.name}.`, { duplicate: `Ya existe un producto llamado ${item.name}.` }))
-          ingredientId = data.id
-        }
-      }
-      resolvedIngredientRows.push({
-        ingredient_id: ingredientId,
-        quantity: Number(item.quantity),
-        unit: item.unit,
-        notes: item.notes.trim() || null,
-        sort_order: index,
-      })
-    }
-
-    if (recipeId && resolvedIngredientRows.length) {
-      const { error: ingredientLinkError } = await supabase.from('recipe_ingredients').insert(
-        resolvedIngredientRows.map((row) => ({ ...row, recipe_id: recipeId })),
-      )
-      if (ingredientLinkError) return finishWithError(friendlyError(ingredientLinkError, 'No se pudieron guardar los ingredientes.', { duplicate: 'Hay un ingrediente repetido con la misma unidad. Júntalos en una sola línea.' }))
-    }
-
-    const stepRows = form.steps.map((step) => step.trim()).filter(Boolean)
-    if (recipeId && stepRows.length) {
-      const { error: stepsError } = await supabase.from('recipe_steps').insert(
-        stepRows.map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction })),
-      )
-      if (stepsError) return finishWithError(friendlyError(stepsError, 'No se pudieron guardar los pasos.'))
+    const { error: saveError } = await supabase.rpc('save_recipe', {
+      p_recipe_id: editingId,
+      p_recipe: recipe,
+      p_ingredients: ingredientRows,
+      p_steps: steps,
+    })
+    if (saveError) {
+      setError(friendlyError(saveError, 'No se pudo guardar la receta.', { duplicate: 'Hay un ingrediente repetido con la misma unidad. Júntalos en una sola línea.' }))
+      setSaving(false)
+      return
     }
 
     setSaving(false)
@@ -419,11 +375,6 @@ export default function RecipesSection() {
     setForm(emptyForm())
     setEditingId(null)
     await loadData()
-
-    function finishWithError(message: string) {
-      setError(message)
-      setSaving(false)
-    }
   }
 
   const deleteRecipe = async (recipe: Recipe) => {

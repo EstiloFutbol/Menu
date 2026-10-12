@@ -30,6 +30,9 @@ const knownMessages: Record<string, string> = {
   'Quantity must be greater than zero': 'La cantidad debe ser mayor que cero.',
   'Servings must be greater than zero': 'Las raciones deben ser mayores que cero.',
   'Ingredient quantity cannot be negative': 'La cantidad no puede ser negativa.',
+  'Recipe not found': 'No se ha encontrado la receta.',
+  'Recipe name is required': 'La receta necesita un nombre.',
+  'Slot has consumption': 'No puedes convertir en “Comida fuera” una franja que ya tiene consumos registrados.',
 }
 
 function errorParts(cause: unknown): { message: string; code: string | null } {

@@ -143,43 +143,20 @@ export default function MenuSection() {
 
     setSaving(true); setError('')
     try {
-      const { data: userData, error: userError } = await supabase.auth.getUser(); if (userError || !userData.user) throw userError ?? new Error('No se ha encontrado la sesión.')
-      let entryId = current?.id
-
       if (!current && draft.mode === 'normal' && validRecipes.length === 0 && validProducts.length === 0) { setDraft(null); return }
-      if (current) {
-        const { error: updateError } = await supabase.from('menu_entries').update({ is_eating_out: draft.mode === 'eating_out' }).eq('id', current.id)
-        if (updateError) throw updateError
-      } else {
-        const { data: inserted, error: insertError } = await supabase.from('menu_entries').insert({ user_id: userData.user.id, planned_date: draft.date, meal: draft.meal, is_eating_out: draft.mode === 'eating_out' }).select('id').single()
-        if (insertError) throw insertError
-        entryId = inserted.id
-      }
-      if (!entryId) throw new Error('No se pudo guardar la franja del menú.')
 
-      if (current) {
-        const removableRecipeIds = current.menu_entry_recipes.filter((item) => !current.consumption_logs.some((log) => log.menu_entry_recipe_id === item.id)).map((item) => item.id)
-        const removableProductIds = current.menu_entry_products.filter((item) => !current.consumption_logs.some((log) => log.menu_entry_product_id === item.id)).map((item) => item.id)
-        if (removableRecipeIds.length) { const { error: deleteError } = await supabase.from('menu_entry_recipes').delete().in('id', removableRecipeIds); if (deleteError) throw deleteError }
-        if (removableProductIds.length) { const { error: deleteError } = await supabase.from('menu_entry_products').delete().in('id', removableProductIds); if (deleteError) throw deleteError }
-      }
-
+      // Lo ya consumido (filas bloqueadas) se conserva en la base de datos; solo se envían las filas pendientes.
+      // save_menu_slot lo guarda todo en una transacción: o se guarda la franja entera o no cambia nada.
       const newRecipes = draft.mode === 'normal' ? validRecipes.filter((item) => !item.locked) : []
       const newProducts = draft.mode === 'normal' ? validProducts.filter((item) => !item.locked) : []
-
-      if (newRecipes.length) { const { error: insertError } = await supabase.from('menu_entry_recipes').insert(newRecipes.map((item, index) => ({ menu_entry_id: entryId, recipe_id: item.recipeId, servings: Number(item.servings), sort_order: index + draft.recipes.filter((candidate) => candidate.locked).length }))); if (insertError) throw insertError }
-      if (newProducts.length) { const { error: insertError } = await supabase.from('menu_entry_products').insert(newProducts.map((item, index) => ({ menu_entry_id: entryId, ingredient_id: item.ingredientId, quantity: Number(item.quantity), unit: item.unit, sort_order: index + draft.products.filter((candidate) => candidate.locked).length }))); if (insertError) throw insertError }
-
-      const plannedCount = draft.mode === 'normal' ? validRecipes.length + validProducts.length : 0
-      const completedCount = current?.consumption_logs?.length ?? 0
-      const completedAt = plannedCount > 0 && completedCount >= plannedCount ? current?.completed_at ?? new Date().toISOString() : null
-      const { error: completionError } = await supabase.from('menu_entries').update({ completed_at: completedAt }).eq('id', entryId)
-      if (completionError) throw completionError
-
-      if (draft.mode === 'normal' && plannedCount === 0 && !hasConsumption) {
-        const { error: deleteError } = await supabase.from('menu_entries').delete().eq('id', entryId)
-        if (deleteError) throw deleteError
-      }
+      const { error: saveError } = await supabase.rpc('save_menu_slot', {
+        p_planned_date: draft.date,
+        p_meal: draft.meal,
+        p_eating_out: draft.mode === 'eating_out',
+        p_recipes: newRecipes.map((item) => ({ recipe_id: item.recipeId, servings: Number(item.servings) })),
+        p_products: newProducts.map((item) => ({ ingredient_id: item.ingredientId, quantity: Number(item.quantity), unit: item.unit })),
+      })
+      if (saveError) throw saveError
 
       // Lo añadido en esta edición se copia también a las franjas marcadas. La franja actual ya está guardada,
       // así que si la copia falla se avisa fuera del modal sin perder lo guardado.
@@ -218,23 +195,15 @@ export default function MenuSection() {
     } catch (cause) { setError(friendlyError(cause, 'No se pudo copiar la franja.')) } finally { setSaving(false) }
   }
 
+  // Quita lo pendiente de la franja. Si no hay nada consumido, la franja desaparece.
   const clearSlot = async () => {
     if (!supabase || !draft) return
     const current = entriesBySlot.get(slotKey(draft.date, draft.meal))
     if (!current) { setDraft(null); return }
     setSaving(true); setError('')
     try {
-      const hasConsumption = current.consumption_logs.length > 0
-      if (!hasConsumption) {
-        const { error: deleteError } = await supabase.from('menu_entries').delete().eq('id', current.id)
-        if (deleteError) throw deleteError
-      } else {
-        const recipeIds = current.menu_entry_recipes.filter((item) => !current.consumption_logs.some((log) => log.menu_entry_recipe_id === item.id)).map((item) => item.id)
-        const productIds = current.menu_entry_products.filter((item) => !current.consumption_logs.some((log) => log.menu_entry_product_id === item.id)).map((item) => item.id)
-        if (recipeIds.length) { const { error } = await supabase.from('menu_entry_recipes').delete().in('id', recipeIds); if (error) throw error }
-        if (productIds.length) { const { error } = await supabase.from('menu_entry_products').delete().in('id', productIds); if (error) throw error }
-        const { error } = await supabase.from('menu_entries').update({ completed_at: current.completed_at ?? new Date().toISOString() }).eq('id', current.id); if (error) throw error
-      }
+      const { error: saveError } = await supabase.rpc('save_menu_slot', { p_planned_date: draft.date, p_meal: draft.meal, p_eating_out: false, p_recipes: [], p_products: [] })
+      if (saveError) throw saveError
       setDraft(null); await loadWeek()
     } catch (cause) { setError(friendlyError(cause, 'No se pudo actualizar la franja.')) } finally { setSaving(false) }
   }
