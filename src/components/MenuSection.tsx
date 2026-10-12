@@ -1,6 +1,7 @@
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, LockKeyhole, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from '../lib/domain'
+import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, formatBaseQuantity, formatQuantity, formatWeekRange, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from '../lib/domain'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import CompleteProductModal from './CompleteProductModal'
 import CompleteRecipeModal from './CompleteRecipeModal'
@@ -35,15 +36,7 @@ type CompletionTarget = RecipeCompletion | ProductCompletion
 const dayLabels = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
 function parseLocalDate(value: string) { const [year, month, day] = value.split('-').map(Number); return new Date(year, month - 1, day) }
 function formatShortDate(value: string) { return new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }).format(parseLocalDate(value)) }
-function formatWeekRange(start: Date) { const formatter = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }); return `${formatter.format(start)} – ${formatter.format(addDays(start, 6))}` }
 function slotKey(date: string, meal: MealType) { return `${date}:${meal}` }
-function formatQuantity(value: number) { return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value) }
-// Muestra una cantidad en unidad base (g, ml…) pasando a kg o l a partir de 1000.
-function formatBaseQuantity(value: number, unit: Unit) {
-  if (unit === 'g' && value >= 1000) return `${formatQuantity(value / 1000)} kg`
-  if (unit === 'ml' && value >= 1000) return `${formatQuantity(value / 1000)} l`
-  return `${formatQuantity(value)} ${unit}`
-}
 function pantryShortfall(item: SlotDraftProduct, pantryRow: PantryRow | undefined) {
   if (item.locked || !pantryRow || pantryRow.quantity == null || !pantryRow.unit) return null
   const planned = convertCompatibleQuantity(Number(item.quantity), item.unit, pantryRow.unit)
@@ -115,10 +108,10 @@ export default function MenuSection() {
       const { data, error: queryError } = await supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out,completed_at,menu_entry_recipes(id,recipe_id,servings,sort_order,recipe:recipes(id,name,base_servings,recipe_ingredients(ingredient_id,quantity,unit))),menu_entry_products(id,ingredient_id,quantity,unit,sort_order,ingredient:ingredients(id,name,category,default_unit)),consumption_logs(id,recipe_id,menu_entry_recipe_id,menu_entry_product_id,consumed_at)').gte('planned_date', from).lte('planned_date', to).order('planned_date')
       if (queryError) throw queryError
       setEntries((data ?? []) as unknown as MenuEntry[])
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo cargar el menú.') } finally { setLoading(false) }
+    } catch (cause) { setError(friendlyError(cause, 'No se pudo cargar el menú.')) } finally { setLoading(false) }
   }, [weekStart])
 
-  useEffect(() => { void loadRecipes().catch((cause) => setError(cause instanceof Error ? cause.message : 'No se pudieron cargar las recetas.')); void loadIngredients().catch((cause) => setError(cause instanceof Error ? cause.message : 'No se pudieron cargar los productos.')); void loadPantry().catch((cause) => setError(cause instanceof Error ? cause.message : 'No se pudo cargar la despensa.')) }, [loadRecipes, loadIngredients, loadPantry])
+  useEffect(() => { void loadRecipes().catch((cause) => setError(friendlyError(cause, 'No se pudieron cargar las recetas.'))); void loadIngredients().catch((cause) => setError(friendlyError(cause, 'No se pudieron cargar los productos.'))); void loadPantry().catch((cause) => setError(friendlyError(cause, 'No se pudo cargar la despensa.'))) }, [loadRecipes, loadIngredients, loadPantry])
   useEffect(() => { void loadWeek() }, [loadWeek])
 
   const openSlot = (date: string, meal: MealType) => {
@@ -196,11 +189,11 @@ export default function MenuSection() {
       setDraft(null)
       if (repeatTargets.length && (repeatRecipes.length || repeatProducts.length)) {
         const { data, error: repeatError } = await supabase.rpc('add_to_menu_slots', { p_slots: slotsFromKeys(repeatTargets), p_recipes: repeatRecipes, p_products: repeatProducts })
-        if (repeatError) setError(`La franja se guardó, pero no se pudo añadir a las otras franjas: ${repeatError.message}`)
+        if (repeatError) setError(`La franja se guardó, pero no se pudo añadir a las otras franjas: ${friendlyError(repeatError, 'inténtalo de nuevo desde "Copiar a…".')}`)
         else setNotice(skippedNotice(data as AddToSlotsResult))
       }
       await loadWeek()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo guardar el menú.') } finally { setSaving(false) }
+    } catch (cause) { setError(friendlyError(cause, 'No se pudo guardar el menú.')) } finally { setSaving(false) }
   }
 
   const openCopy = () => {
@@ -222,7 +215,7 @@ export default function MenuSection() {
       if (copyError) throw copyError
       setNotice(skippedNotice(data as AddToSlotsResult))
       setCopyTarget(null); await loadWeek()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo copiar la franja.') } finally { setSaving(false) }
+    } catch (cause) { setError(friendlyError(cause, 'No se pudo copiar la franja.')) } finally { setSaving(false) }
   }
 
   const clearSlot = async () => {
@@ -243,7 +236,7 @@ export default function MenuSection() {
         const { error } = await supabase.from('menu_entries').update({ completed_at: current.completed_at ?? new Date().toISOString() }).eq('id', current.id); if (error) throw error
       }
       setDraft(null); await loadWeek()
-    } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo actualizar la franja.') } finally { setSaving(false) }
+    } catch (cause) { setError(friendlyError(cause, 'No se pudo actualizar la franja.')) } finally { setSaving(false) }
   }
 
   // Los productos ya guardados siguen apareciendo en su fila aunque se hayan agotado, para no romper la edición.

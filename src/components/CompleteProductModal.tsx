@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { convertCompatibleQuantity } from '../lib/domain'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -15,15 +17,6 @@ type Props = {
   unit: Unit
   onClose: () => void
   onCompleted: () => void
-}
-
-function compatible(quantity: number, from: Unit, to: Unit) {
-  if (from === to) return quantity
-  if (from === 'g' && to === 'kg') return quantity / 1000
-  if (from === 'kg' && to === 'g') return quantity * 1000
-  if (from === 'ml' && to === 'l') return quantity / 1000
-  if (from === 'l' && to === 'ml') return quantity * 1000
-  return null
 }
 
 export default function CompleteProductModal({ entryId, productId, productName, quantity, unit, onClose, onCompleted }: Props) {
@@ -43,13 +36,13 @@ export default function CompleteProductModal({ entryId, productId, productName, 
         const { data, error: pantryError } = await supabase.from('pantry_items').select('quantity,unit,status').eq('ingredient_id', product.ingredient_id).maybeSingle()
         if (pantryError) throw pantryError
         setPantry((data ?? null) as PantryRow | null)
-      } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo consultar la despensa.') }
+      } catch (cause) { setError(friendlyError(cause, 'No se pudo consultar la despensa.')) }
       finally { setLoading(false) }
     }
     void load()
   }, [productId])
 
-  const converted = pantry?.quantity !== null && pantry?.quantity !== undefined && pantry?.unit ? compatible(Number(usedQuantity || 0), usedUnit, pantry.unit) : null
+  const converted = pantry?.quantity !== null && pantry?.quantity !== undefined && pantry?.unit ? convertCompatibleQuantity(Number(usedQuantity || 0), usedUnit, pantry.unit) : null
   const canDeduct = converted !== null
 
   const confirm = async () => {
@@ -61,8 +54,7 @@ export default function CompleteProductModal({ entryId, productId, productName, 
       if (rpcError) throw rpcError
       onCompleted()
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'No se pudo completar el producto.'
-      setError(message.includes('already been completed') ? 'Este producto ya estaba completado. No se ha descontado nada de nuevo.' : message)
+      setError(friendlyError(cause, 'No se pudo completar el producto.'))
     } finally { setSaving(false) }
   }
 

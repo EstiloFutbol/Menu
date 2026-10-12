@@ -1,5 +1,6 @@
 import { ChevronLeft, Clock3, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -269,7 +270,7 @@ export default function RecipesSection() {
     ])
 
     if (recipeError || ingredientError) {
-      setError(recipeError?.message ?? ingredientError?.message ?? 'No se pudieron cargar los datos.')
+      setError(friendlyError(recipeError ?? ingredientError, 'No se pudieron cargar los datos.'))
     } else {
       const normalized = ((recipeData ?? []) as unknown as Recipe[]).map((recipe) => ({
         ...recipe,
@@ -355,14 +356,14 @@ export default function RecipesSection() {
     let recipeId = editingId
     if (editingId) {
       const { error: updateError } = await supabase.from('recipes').update(payload).eq('id', editingId)
-      if (updateError) return finishWithError(updateError.message)
+      if (updateError) return finishWithError(friendlyError(updateError, 'No se pudo guardar la receta.', { duplicate: 'Ya existe una receta con ese nombre.' }))
       const { error: deleteIngredientsError } = await supabase.from('recipe_ingredients').delete().eq('recipe_id', editingId)
-      if (deleteIngredientsError) return finishWithError(deleteIngredientsError.message)
+      if (deleteIngredientsError) return finishWithError(friendlyError(deleteIngredientsError, 'No se pudo guardar la receta.'))
       const { error: deleteStepsError } = await supabase.from('recipe_steps').delete().eq('recipe_id', editingId)
-      if (deleteStepsError) return finishWithError(deleteStepsError.message)
+      if (deleteStepsError) return finishWithError(friendlyError(deleteStepsError, 'No se pudo guardar la receta.'))
     } else {
       const { data, error: insertError } = await supabase.from('recipes').insert(payload).select('id').single()
-      if (insertError || !data) return finishWithError(insertError?.message ?? 'No se pudo crear la receta.')
+      if (insertError || !data) return finishWithError(friendlyError(insertError, 'No se pudo crear la receta.', { duplicate: 'Ya existe una receta con ese nombre.' }))
       recipeId = data.id
     }
 
@@ -385,7 +386,7 @@ export default function RecipesSection() {
             })
             .select('id')
             .single()
-          if (ingredientError || !data) return finishWithError(ingredientError?.message ?? `No se pudo crear ${item.name}.`)
+          if (ingredientError || !data) return finishWithError(friendlyError(ingredientError, `No se pudo crear ${item.name}.`, { duplicate: `Ya existe un producto llamado ${item.name}.` }))
           ingredientId = data.id
         }
       }
@@ -402,7 +403,7 @@ export default function RecipesSection() {
       const { error: ingredientLinkError } = await supabase.from('recipe_ingredients').insert(
         resolvedIngredientRows.map((row) => ({ ...row, recipe_id: recipeId })),
       )
-      if (ingredientLinkError) return finishWithError(ingredientLinkError.message)
+      if (ingredientLinkError) return finishWithError(friendlyError(ingredientLinkError, 'No se pudieron guardar los ingredientes.', { duplicate: 'Hay un ingrediente repetido con la misma unidad. Júntalos en una sola línea.' }))
     }
 
     const stepRows = form.steps.map((step) => step.trim()).filter(Boolean)
@@ -410,7 +411,7 @@ export default function RecipesSection() {
       const { error: stepsError } = await supabase.from('recipe_steps').insert(
         stepRows.map((instruction, index) => ({ recipe_id: recipeId, step_number: index + 1, instruction })),
       )
-      if (stepsError) return finishWithError(stepsError.message)
+      if (stepsError) return finishWithError(friendlyError(stepsError, 'No se pudieron guardar los pasos.'))
     }
 
     setSaving(false)
@@ -428,7 +429,7 @@ export default function RecipesSection() {
   const deleteRecipe = async (recipe: Recipe) => {
     if (!supabase || !window.confirm(`¿Eliminar “${recipe.name}”?`)) return
     const { error: deleteError } = await supabase.from('recipes').delete().eq('id', recipe.id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(friendlyError(deleteError, 'No se pudo eliminar la receta.', { inUse: 'No se puede eliminar porque esta receta está en el menú. Quítala antes del menú.' }))
     else await loadData()
   }
 

@@ -118,3 +118,24 @@ export function pendingPlannedLines(entries: PlanEntryForNeeds[]): PlannedLine[]
   }
   return lines
 }
+
+// Inversa de toBaseQuantity para mostrar: 1500 g se muestra como 1,5 kg.
+export function fromBaseQuantity(quantity: number, unit: MeasurementUnit): { quantity: number; unit: MeasurementUnit } {
+  if (unit === 'g' && quantity >= 1000) return { quantity: quantity / 1000, unit: 'kg' }
+  if (unit === 'ml' && quantity >= 1000) return { quantity: quantity / 1000, unit: 'l' }
+  return { quantity, unit }
+}
+
+export function formatQuantity(value: number, maximumFractionDigits = 2) {
+  return new Intl.NumberFormat('es-ES', { maximumFractionDigits }).format(value)
+}
+
+export function formatBaseQuantity(quantity: number, unit: MeasurementUnit) {
+  const display = fromBaseQuantity(quantity, unit)
+  return `${formatQuantity(display.quantity)} ${display.unit}`
+}
+
+export function formatWeekRange(start: Date) {
+  const formatter = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' })
+  return `${formatter.format(start)} – ${formatter.format(addDays(start, 6))}`
+}

@@ -1,5 +1,6 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { PackagePlus, Pencil, Search, Trash2, X } from 'lucide-react'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -46,7 +47,7 @@ export default function ProductCatalogSection() {
       .order('name')
 
     if (loadError) {
-      setError(loadError.message)
+      setError(friendlyError(loadError, 'No se pudo cargar el catálogo.'))
       setLoading(false)
       return
     }
@@ -126,9 +127,7 @@ export default function ProductCatalogSection() {
     setSaving(false)
 
     if (result.error) {
-      setError(result.error.message.includes('ingredients_user_id_name_key')
-        ? 'Ya existe un producto con ese nombre.'
-        : result.error.message)
+      setError(friendlyError(result.error, 'No se pudo guardar el producto.', { duplicate: 'Ya existe un producto con ese nombre.' }))
       return
     }
 
@@ -149,7 +148,7 @@ export default function ProductCatalogSection() {
     setDeletingId(null)
 
     if (deleteError) {
-      setError(deleteError.message)
+      setError(friendlyError(deleteError, 'No se pudo eliminar el producto.'))
       return
     }
 
