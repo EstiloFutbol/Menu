@@ -2,7 +2,9 @@ import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { convertCompatibleQuantity, formatQuantity } from '../lib/domain'
 import { friendlyError } from '../lib/errors'
+import { numberToInputValue } from '../lib/numbers'
 import { supabase } from '../lib/supabase'
+import { NumberInput } from './NumberInput'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -85,7 +87,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
           ingredients.map((item) => ({
             ingredientId: item.ingredient_id,
             name: item.ingredient?.name ?? 'Ingrediente',
-            quantity: String(Number(item.quantity) * scale),
+            quantity: numberToInputValue(Number(item.quantity) * scale, 'quantity'),
             unit: item.unit,
             pantry: pantryMap.get(item.ingredient_id) ?? null,
           })),
@@ -182,14 +184,13 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
                     </div>
                     <div>
                       <label className="mb-1 block text-xs font-medium text-neutral-500">Cantidad usada</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.001"
+                      <NumberInput
+                        kind="quantity"
+                        allowZero
                         value={item.quantity}
-                        onChange={(event) => {
+                        onValueChange={(input) => {
                           const next = [...items]
-                          next[index] = { ...next[index], quantity: event.target.value }
+                          next[index] = { ...next[index], quantity: input }
                           setItems(next)
                         }}
                         className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400"

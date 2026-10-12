@@ -2,6 +2,7 @@ import { ChevronLeft, Clock3, Pencil, Plus, Search, Trash2, X } from 'lucide-rea
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { NumberInput } from './NumberInput'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = [
@@ -182,12 +183,10 @@ function IngredientEditor({
 
         <div>
           <label className="mb-1.5 block text-xs font-medium text-neutral-500">Cantidad</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
+          <NumberInput
+            kind="quantity"
             value={value.quantity}
-            onChange={(event) => onChange({ ...value, quantity: event.target.value })}
+            onValueChange={(input) => onChange({ ...value, quantity: input })}
             className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-neutral-400"
           />
         </div>
@@ -417,11 +416,11 @@ export default function RecipesSection() {
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Tiempo de preparación (min)</label>
-              <input type="number" min="0" value={form.preparationMinutes} onChange={(event) => setForm({ ...form, preparationMinutes: event.target.value })} className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 outline-none focus:border-neutral-400" />
+              <NumberInput kind="minutes" value={form.preparationMinutes} onValueChange={(input) => setForm({ ...form, preparationMinutes: input })} className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 outline-none focus:border-neutral-400" />
             </div>
             <div>
               <label className="mb-1.5 block text-sm font-medium">Raciones base</label>
-              <input required type="number" min="0.1" step="0.1" value={form.servings} onChange={(event) => setForm({ ...form, servings: event.target.value })} className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 outline-none focus:border-neutral-400" />
+              <NumberInput kind="servings" required value={form.servings} onValueChange={(input) => setForm({ ...form, servings: input })} className="w-full rounded-xl border border-neutral-200 px-3.5 py-2.5 outline-none focus:border-neutral-400" />
             </div>
           </div>
         </section>
@@ -488,12 +487,10 @@ export default function RecipesSection() {
               <label key={key} className="text-sm font-medium">
                 {label}
                 <div className="mt-1.5 flex items-center rounded-xl border border-neutral-200 bg-white pr-3 focus-within:border-neutral-400">
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                  <NumberInput
+                    kind="nutrition"
                     value={form[key as keyof Pick<FormState, 'calories' | 'protein' | 'carbs' | 'fiber' | 'fat' | 'sugar'>] as string}
-                    onChange={(event) => setForm({ ...form, [key]: event.target.value })}
+                    onValueChange={(input) => setForm({ ...form, [key]: input })}
                     className="min-w-0 flex-1 rounded-xl px-3.5 py-2.5 outline-none"
                   />
                   <span className="text-xs text-neutral-400">{suffix}</span>
