@@ -22,6 +22,7 @@ type ShoppingItem = {
   pantry_check_required: boolean
   checked: boolean
   added_to_pantry: boolean
+  source: 'menu' | 'manual'
   ingredient: Ingredient | null
 }
 
@@ -163,6 +164,7 @@ function ShoppingSection() {
         pantry_check_required,
         checked,
         added_to_pantry,
+        source,
         ingredient:ingredients(id,name,category,default_unit)
       `)
       .eq('shopping_list_id', list.id)
@@ -234,6 +236,11 @@ function ShoppingSection() {
                 ingredient:ingredients(id,name,category,default_unit)
               )
             )
+          ),
+          menu_entry_products(
+            quantity,
+            unit,
+            ingredient:ingredients(id,name,category,default_unit)
           )
         `)
         .gte('planned_date', start)
@@ -250,6 +257,17 @@ function ShoppingSection() {
       const pantry = (pantryData ?? []) as PantryItem[]
       const pantryByIngredient = new Map(pantry.map((item) => [item.ingredient_id, item]))
       const required = new Map<string, RequiredItem>()
+      const addRequired = (ingredient: Ingredient, quantity: number, unit: Unit) => {
+        const normalized = toBase(quantity, unit)
+        const key = `${ingredient.id}:${normalized.unit}`
+        const current = required.get(key)
+        required.set(key, {
+          ingredient,
+          baseUnit: normalized.unit,
+          quantityBase: (current?.quantityBase ?? 0) + normalized.quantity,
+          pantryCheckRequired: current?.pantryCheckRequired ?? false,
+        })
+      }
 
       for (const entry of (menuData ?? []) as any[]) {
         for (const menuRecipe of entry.menu_entry_recipes ?? []) {
@@ -260,31 +278,37 @@ function ShoppingSection() {
           for (const recipeIngredient of recipe.recipe_ingredients ?? []) {
             const ingredient = recipeIngredient.ingredient as Ingredient | null
             if (!ingredient) continue
-            const normalized = toBase(Number(recipeIngredient.quantity) * scale, recipeIngredient.unit as Unit)
-            const key = `${ingredient.id}:${normalized.unit}`
-            const current = required.get(key)
-            required.set(key, {
-              ingredient,
-              baseUnit: normalized.unit,
-              quantityBase: (current?.quantityBase ?? 0) + normalized.quantity,
-              pantryCheckRequired: current?.pantryCheckRequired ?? false,
-            })
+            addRequired(ingredient, Number(recipeIngredient.quantity) * scale, recipeIngredient.unit as Unit)
           }
         }
+
+        // Los productos directos del menú se tratan igual que los ingredientes de receta.
+        for (const menuProduct of entry.menu_entry_products ?? []) {
+          const ingredient = menuProduct.ingredient as Ingredient | null
+          if (!ingredient) continue
+          addRequired(ingredient, Number(menuProduct.quantity), menuProduct.unit as Unit)
+        }
+      }
+
+      // Lo que se conserva al regenerar (manuales y comprados que aún no están en despensa) ya cubre
+      // parte de lo necesario, así que se descuenta para no duplicarlo. Lo ya añadido a la despensa
+      // se descuenta a través de la propia despensa.
+      const keptByIngredient = new Map<string, Array<{ quantity: number; unit: Unit }>>()
+      for (const item of items) {
+        if (item.source === 'menu' && !item.checked) continue
+        if (item.added_to_pantry || !item.ingredient_id || item.quantity == null || !item.unit) continue
+        const current = keptByIngredient.get(item.ingredient_id) ?? []
+        current.push({ quantity: Number(item.quantity), unit: item.unit })
+        keptByIngredient.set(item.ingredient_id, current)
       }
 
       const generatedRows: Array<{
         ingredient_id: string
-        manual_name: null
         quantity: number
         unit: Unit
         pantry_check_required: boolean
-        checked: boolean
-        added_to_pantry: boolean
-        sort_order: number
       }> = []
 
-      let order = 0
       for (const value of required.values()) {
         let quantityNeeded = value.quantityBase
         let pantryCheckRequired = false
@@ -303,34 +327,30 @@ function ShoppingSection() {
           }
         }
 
-        if (quantityNeeded <= 0 && !pantryCheckRequired) continue
+        for (const kept of keptByIngredient.get(value.ingredient.id) ?? []) {
+          if (!areCompatible(kept.unit, value.baseUnit)) continue
+          quantityNeeded = Math.max(0, quantityNeeded - toBase(kept.quantity, kept.unit).quantity)
+        }
+
+        if (quantityNeeded <= 0) continue
         const display = fromBase(quantityNeeded, value.baseUnit)
         generatedRows.push({
           ingredient_id: value.ingredient.id,
-          manual_name: null,
           quantity: display.quantity,
           unit: display.unit,
           pantry_check_required: pantryCheckRequired,
-          checked: false,
-          added_to_pantry: false,
-          sort_order: order++,
         })
       }
 
-      const id = await ensureList()
-      if (!id) return
+      const { data: regeneratedListId, error: regenerateError } = await supabase.rpc('regenerate_shopping_list', {
+        p_week_start: isoDate(weekStart),
+        p_items: generatedRows,
+      })
+      if (regenerateError) throw regenerateError
+      setListId(regeneratedListId as string)
 
-      const { error: deleteError } = await supabase.from('shopping_items').delete().eq('shopping_list_id', id)
-      if (deleteError) throw deleteError
-
-      if (generatedRows.length) {
-        const { error: insertError } = await supabase
-          .from('shopping_items')
-          .insert(generatedRows.map((row) => ({ ...row, shopping_list_id: id })))
-        if (insertError) throw insertError
-      }
-
-      setMessage(generatedRows.length ? 'Lista generada a partir del menú y la despensa.' : 'No necesitas comprar nada para esta semana.')
+      const keptCount = items.filter((item) => item.source === 'manual' || item.checked).length
+      setMessage(`${generatedRows.length ? 'Lista generada a partir del menú y la despensa.' : 'No necesitas comprar nada más del menú para esta semana.'}${keptCount ? ` Se han conservado ${keptCount} producto${keptCount === 1 ? '' : 's'} añadido${keptCount === 1 ? '' : 's'} a mano o ya comprado${keptCount === 1 ? '' : 's'}.` : ''}`)
       await loadList()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'No se ha podido generar la lista.')
@@ -402,6 +422,7 @@ function ShoppingSection() {
         checked: false,
         added_to_pantry: false,
         sort_order: items.length + 1000,
+        source: 'manual',
       })
       if (insertError) throw insertError
       setManualName('')
@@ -562,7 +583,7 @@ function ShoppingSection() {
         <div className="rounded-3xl border border-dashed border-neutral-300 bg-white p-8 text-center">
           <ShoppingBasket className="mx-auto text-neutral-300" size={32} />
           <h2 className="mt-3 text-lg font-semibold">Todavía no hay lista</h2>
-          <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-neutral-500">Planifica recetas en Menú y pulsa “Generar desde menú”. Se tendrán en cuenta las raciones y la despensa.</p>
+          <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-neutral-500">Planifica recetas o productos en Menú y pulsa “Generar desde menú”. Se tendrán en cuenta las raciones y la despensa.</p>
         </div>
       ) : (
         <div className="space-y-4">
