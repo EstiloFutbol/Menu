@@ -1,9 +1,10 @@
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, ShoppingBasket, Trash2 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { addDays, aggregateNeeds, areUnitsCompatible, compareNeedWithPantry, convertCompatibleQuantity, formatQuantity, formatWeekRange, fromBaseQuantity, localDateString, pendingPlannedLines, startOfWeek, toBaseQuantity, type PlanEntryForNeeds } from '../lib/domain'
-import { normalizeDecimalInput, parseDecimalInput } from '../lib/receipt'
+import { parseDecimalInput } from '../lib/receipt'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { NumberInput } from './NumberInput'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -459,7 +460,7 @@ function ShoppingSection() {
               required
               className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400"
             />
-            <input type="text" inputMode="decimal" value={manualQuantity} onChange={(event) => setManualQuantity(normalizeDecimalInput(event.target.value))} placeholder="Cantidad" className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
+            <NumberInput kind="quantity" value={manualQuantity} onValueChange={(input) => setManualQuantity(input)} placeholder="Cantidad" className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400" />
             <select value={manualUnit} onChange={(event) => setManualUnit(event.target.value as Unit)} className="rounded-xl border border-neutral-200 px-3 py-2.5 text-sm outline-none focus:border-neutral-400">{units.map((unit) => <option key={unit}>{unit}</option>)}</select>
             <button className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">Añadir</button>
           </div>

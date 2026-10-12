@@ -1,11 +1,12 @@
 import { Camera, CheckCircle2, FilePlus2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeDecimalInput, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
+import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { convertCompatibleQuantity } from '../lib/domain'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { NumberInput } from './NumberInput'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -331,7 +332,7 @@ export default function ReceiptImportSection() {
     <section className="grid gap-4 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:grid-cols-3">
       <label className="text-sm font-medium text-neutral-700">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <label className="text-sm font-medium text-neutral-700">Total del ticket<input type="text" inputMode="decimal" value={totalAmount} onChange={(e) => setTotalAmount(normalizeDecimalInput(e.target.value))} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
+      <label className="text-sm font-medium text-neutral-700">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span></div>
     </section>
 
@@ -363,9 +364,9 @@ export default function ReceiptImportSection() {
                   }
                 }} placeholder={sourceMode === 'manual' ? 'Buscar o escribir producto' : undefined} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
                 {sourceMode === 'manual' ? <label className="text-xs font-medium text-neutral-500">Producto del catálogo<input value={line.translatedName} readOnly className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2.5 text-sm font-normal text-neutral-600" /></label> : <label className="text-xs font-medium text-neutral-500">Qué es realmente<input list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>}
-                <label className="text-xs font-medium text-neutral-500">Cantidad<input type="text" inputMode="decimal" value={line.quantity} onChange={(e) => updateLine(line.id, { quantity: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
+                <label className="text-xs font-medium text-neutral-500">Cantidad<NumberInput kind="quantity" value={line.quantity} onValueChange={(input) => updateLine(line.id, { quantity: input })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
                 <label className="text-xs font-medium text-neutral-500">Unidad<select value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value as Unit })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
-                <label className="text-xs font-medium text-neutral-500">Precio línea<input type="text" inputMode="decimal" value={line.totalPrice} onChange={(e) => updateLine(line.id, { totalPrice: normalizeDecimalInput(e.target.value) })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
+                <label className="text-xs font-medium text-neutral-500">Precio línea<NumberInput kind="money" value={line.totalPrice} onValueChange={(input) => updateLine(line.id, { totalPrice: input })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
               </div>
               {!line.ingredientId && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-neutral-500">Categoría del nuevo alimento<select value={line.category} onChange={(e) => updateLine(line.id, { category: e.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{categories.map((category) => <option key={category}>{category}</option>)}</select></label><div className="flex items-end"><p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">No coincide con un alimento existente. Al importar se creará “{line.translatedName || '…'}”.</p></div></div>}
               <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3">
