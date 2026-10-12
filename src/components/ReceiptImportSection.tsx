@@ -1,7 +1,9 @@
-import { Camera, CheckCircle2, FilePlus2, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
+import { Camera, CheckCircle2, FilePlus2, FileText, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
+import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
+import { isMercadonaReceipt, parseMercadonaReceipt } from '../lib/mercadona'
+import { numberToInputValue } from '../lib/numbers'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { convertCompatibleQuantity } from '../lib/domain'
 import { friendlyError } from '../lib/errors'
@@ -90,22 +92,28 @@ export default function ReceiptImportSection() {
     return map
   }, [pantry])
 
-  function buildReviewLines(text: string) {
-    const parsed = parseReceiptText(text)
+  function buildReviewLines(parsed: ParsedReceiptLine[]) {
     return parsed.map((item, index): ReviewLine => {
       const normalized = normalizeReceiptName(item.rawName)
       const alias = aliasesByNormalized.get(normalized)
       const directIngredient = ingredientsByNormalized.get(normalized)
       const ingredient = alias?.ingredient ?? directIngredient ?? null
       const defaultUnit = ingredient?.default_unit ?? 'unidad'
+      // Los productos a peso traen los kilos exactos; si el producto se mide en
+      // gramos se pasan a gramos y, si no, se guardan en kilos.
+      const weighed = item.weightKg != null
+      const unit: Unit = weighed ? (defaultUnit === 'g' ? 'g' : 'kg') : defaultUnit
+      const quantity = weighed
+        ? numberToInputValue(unit === 'g' ? item.weightKg! * 1000 : item.weightKg!, 'quantity')
+        : String(defaultUnit === 'unidad' && item.packages ? item.packages : 1)
       return {
         id: lineId(index),
         rawName: item.rawName,
         translatedName: ingredient?.name ?? item.rawName,
         ingredientId: ingredient?.id ?? '',
         category: ingredient?.category ?? 'Otros',
-        quantity: String(defaultUnit === 'unidad' && item.packages ? item.packages : 1),
-        unit: defaultUnit,
+        quantity,
+        unit,
         totalPrice: item.totalPrice == null ? '' : String(item.totalPrice),
         include: true,
         addToPantry: true,
@@ -148,7 +156,7 @@ export default function ReceiptImportSection() {
       }
 
       const text = bestText
-      setLines(buildReviewLines(text))
+      setLines(buildReviewLines(parseReceiptText(text)))
       const total = extractReceiptTotal(text)
       const receiptDate = extractReceiptDate(text)
       const store = guessStoreName(text)
@@ -161,6 +169,47 @@ export default function ReceiptImportSection() {
       setProgress('')
     } finally {
       if (worker) await worker.terminate()
+      setReading(false)
+      event.target.value = ''
+    }
+  }
+
+  // Ticket digital en PDF (por ejemplo, el que Mercadona envía por correo). El
+  // texto va dentro del PDF, así que no hace falta OCR.
+  async function handlePdf(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setError('')
+    setSuccess('')
+    setSourceMode('ocr')
+    setReading(true)
+    setProgress('Leyendo PDF…')
+
+    try {
+      const { extractPdfText } = await import('../lib/receipt-pdf')
+      const text = await extractPdfText(file)
+      if (!text.trim()) throw new Error('El PDF no contiene texto. Si es un ticket escaneado, usa la opción de foto.')
+
+      if (isMercadonaReceipt(text)) {
+        const receipt = parseMercadonaReceipt(text)
+        setLines(buildReviewLines(receipt.lines))
+        setStoreName(receipt.store)
+        if (receipt.total != null) setTotalAmount(String(receipt.total))
+        if (receipt.date) setPurchasedAt(localDatetimeValue(receipt.date))
+      } else {
+        setLines(buildReviewLines(parseReceiptText(text)))
+        const total = extractReceiptTotal(text)
+        const receiptDate = extractReceiptDate(text)
+        const store = guessStoreName(text)
+        if (total != null) setTotalAmount(String(total))
+        if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
+        if (store) setStoreName(store)
+      }
+      setProgress('')
+    } catch (cause) {
+      setError(friendlyError(cause, 'No se pudo leer el PDF.'))
+      setProgress('')
+    } finally {
       setReading(false)
       event.target.value = ''
     }
@@ -291,11 +340,15 @@ export default function ReceiptImportSection() {
         <div className="mx-auto max-w-xl text-center">
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-neutral-100"><ReceiptText size={25} /></div>
           <h2 className="mt-4 text-xl font-semibold">Importar ticket</h2>
-          <p className="mt-2 text-sm leading-6 text-neutral-500">Puedes leer un ticket desde una foto o crear uno vacío y rellenarlo manualmente. En ambos casos revisarás todos los productos antes de guardar.</p>
+          <p className="mt-2 text-sm leading-6 text-neutral-500">Puedes leer un ticket desde una foto, subir el PDF del ticket digital (como el que Mercadona envía por correo) o crear uno vacío y rellenarlo manualmente. En ambos casos revisarás todos los productos antes de guardar.</p>
           <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">
               <Camera size={18} /> Hacer foto o elegir ticket
               <input type="file" accept="image/*" capture="environment" onChange={handleImage} className="hidden" />
+            </label>
+            <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-sm font-semibold text-neutral-700">
+              <FileText size={18} /> Subir PDF
+              <input type="file" accept="application/pdf,.pdf" onChange={handlePdf} className="hidden" />
             </label>
             <button type="button" onClick={startEmptyTicket} className="inline-flex items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-5 py-3 text-sm font-semibold text-neutral-700">
               <FilePlus2 size={18} /> Crear ticket vacío

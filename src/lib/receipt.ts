@@ -2,6 +2,8 @@ export type ParsedReceiptLine = {
   rawName: string
   totalPrice: number | null
   packages: number | null
+  // Solo en productos a peso de tickets digitales (por ejemplo, fruta en Mercadona).
+  weightKg?: number | null
 }
 
 const ignoredLinePatterns = [
