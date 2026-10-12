@@ -38,6 +38,16 @@ describe('ticket digital de Mercadona', () => {
     expect(result.date).toEqual(new Date(2026, 2, 14, 13, 14))
   })
 
+  it('tolera los fallos típicos del OCR en una foto', () => {
+    const result = parseMercadonaReceipt('MERCADONA S.A.\nDescripcion P. Unit Importe\n1 CEBOLLA TUBO 2, 40\n2 ARROZ BASMATI 1.15 2.30\n1 BERENJENA\n0,612 kg 2,40 E/kg 1,47\nTOTAL (€) 6,17')
+    expect(result.lines).toEqual([
+      { rawName: 'CEBOLLA TUBO', packages: 1, totalPrice: 2.4 },
+      { rawName: 'ARROZ BASMATI', packages: 2, totalPrice: 2.3 },
+      { rawName: 'BERENJENA', packages: 1, totalPrice: 1.47, weightKg: 0.612 },
+    ])
+    expect(result.total).toBe(6.17)
+  })
+
   it('reconstruye las líneas del PDF a partir de las posiciones del texto', () => {
     expect(groupIntoLines([
       { text: '2,40', x: 200, y: 500 },

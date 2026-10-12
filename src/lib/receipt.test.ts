@@ -22,6 +22,19 @@ describe('ticket OCR helpers', () => {
     ])
   })
 
+  it('ignora lo que va después del total y el desglose de IVA', () => {
+    const result = parseReceiptText('PAN 1,00\nLECHE 2,00\nTOTAL (€) 3,00\nTARJETA BANCARIA 3,00\n10% 2,73 0,27\nImporte: 3,00 €\nDEVOLUCION 1,00')
+    expect(result.map((line) => line.rawName)).toEqual(['PAN', 'LECHE'])
+  })
+
+  it('separa unidades y precio unitario, y lee productos a peso en dos líneas', () => {
+    const result = parseReceiptText('2 MOZZARELLA FRESCA 0,90 1,80\n1 BERENJENA\n0,612 kg 2,40 €/kg 1,47\nTOTAL 3,27')
+    expect(result).toEqual([
+      { rawName: 'MOZZARELLA FRESCA', totalPrice: 1.8, packages: 2 },
+      { rawName: 'BERENJENA', totalPrice: 1.47, packages: null, weightKg: 0.612 },
+    ])
+  })
+
   it('prefiere una lectura con más productos válidos', () => {
     const poor = 'SUPERMERCADO\nTOTAL 5,00'
     const good = 'SUPERMERCADO\nPAN 1,00\nLECHE 2,00\nTOTAL 3,00'

@@ -1,4 +1,4 @@
-import { extractReceiptDate, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
+import { extractReceiptDate, normalizeOcrPrices, parseQuantityFirstItem, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
 
 export type ParsedStoreReceipt = {
   store: string
@@ -8,20 +8,9 @@ export type ParsedStoreReceipt = {
 }
 
 const price = String.raw`\d{1,4},\d{2}`
-// "1 CEBOLLA TUBO 2,40" o "2 MOZZARELLA FRESCA 0,90 1,80"
-const itemPattern = new RegExp(String.raw`^(\d{1,3}) (.+?)(?: (${price}))? (${price})$`)
 // "1 BERENJENA" seguido en la línea siguiente de "0,612 kg 2,40 €/kg 1,47"
 const weighedNamePattern = /^(\d{1,3}) (\D.*)$/
-const weightPattern = new RegExp(String.raw`^(\d{1,3},\d{1,3}) kg (${price}) €/kg (${price})$`)
-
-// La fecha con su hora ("14/03/2026 13:14"); si no hay hora, la de extractReceiptDate.
-function extractReceiptDateTime(text: string) {
-  const match = text.match(/\b(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})\b/)
-  if (!match) return extractReceiptDate(text)
-  const [, day, month, year, hours, minutes] = match.map(Number)
-  const date = new Date(year, month - 1, day, hours, minutes)
-  return Number.isNaN(date.getTime()) ? extractReceiptDate(text) : date
-}
+const weightPattern = new RegExp(String.raw`^(\d{1,3},\d{1,3}) ?kg (${price}) ?(?:€|e)? ?/ ?kg (${price})$`, 'i')
 
 export function isMercadonaReceipt(text: string) {
   return /\bMERCADONA\b/i.test(text)
@@ -31,7 +20,10 @@ export function isMercadonaReceipt(text: string) {
 // miran las líneas entre la cabecera "Descripción" y el "TOTAL", así que el
 // desglose de IVA y los datos del pago no se confunden con productos.
 export function parseMercadonaReceipt(text: string): ParsedStoreReceipt {
-  const rows = text.split(/\r?\n/).map((line) => line.replace(/\s+/g, ' ').trim()).filter(Boolean)
+  // En fotos el OCR a veces lee "2, 40" o "2.40": se deja todo como "2,40".
+  const rows = text.split(/\r?\n/)
+    .map((line) => normalizeOcrPrices(line.replace(/\s+/g, ' ')).trim())
+    .filter(Boolean)
   const start = rows.findIndex((line) => /^descripci[oó]n\b/i.test(line))
   const end = rows.findIndex((line, index) => index > start && /^total\b/i.test(line))
   const body = rows.slice(start + 1, end === -1 ? undefined : end)
@@ -39,9 +31,9 @@ export function parseMercadonaReceipt(text: string): ParsedStoreReceipt {
   const lines: ParsedReceiptLine[] = []
   for (let index = 0; index < body.length; index += 1) {
     const row = body[index]
-    const item = row.match(itemPattern)
+    const item = parseQuantityFirstItem(row)
     if (item) {
-      lines.push({ rawName: item[2].trim(), packages: Number(item[1]), totalPrice: parseSpanishNumber(item[4]) })
+      lines.push(item)
       continue
     }
 
@@ -63,7 +55,7 @@ export function parseMercadonaReceipt(text: string): ParsedStoreReceipt {
 
   return {
     store: 'Mercadona',
-    date: extractReceiptDateTime(text),
+    date: extractReceiptDate(text),
     total: totalMatch ? parseSpanishNumber(totalMatch[1]) : null,
     lines,
   }
