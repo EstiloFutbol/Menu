@@ -30,7 +30,9 @@ El objetivo del producto es conectar estas cuatro áreas:
 
 - Cinco franjas diarias: desayuno, almuerzo, comida, merienda y cena.
 - Varias recetas por franja.
-- Productos directos por franja.
+- Productos directos por franja, elegidos entre lo que hay en la despensa.
+- Añadir una receta o producto a varias franjas a la vez en una sola operación; las franjas marcadas como `Comida fuera` se omiten.
+- Resumen semanal desplegable.
 - Raciones y cantidades configurables.
 - Opción `Comida fuera`.
 - Navegación entre semanas.
@@ -51,10 +53,13 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Ingredientes, cantidades, unidades y notas.
 - Pasos de preparación.
 - Información nutricional por ración: calorías, proteína, hidratos, fibra, grasa y azúcar.
+- Guardado atómico: la receta, sus ingredientes y sus pasos se guardan en una sola transacción.
 
 ### Compra
 
-- Lista de compra generada a partir de necesidades planificadas.
+- Lista de compra generada a partir de necesidades planificadas, incluidos los productos directos del menú.
+- Lo que ya se ha consumido no vuelve a pedirse.
+- Regenerar la lista solo sustituye los ítems generados pendientes; se conservan los añadidos a mano y los ya comprados.
 - Descuento de existencias conocidas de la despensa.
 - Aviso cuando un producto requiere revisión manual de despensa.
 - Productos manuales con autocompletado desde el catálogo.
@@ -65,9 +70,13 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Tienda, fecha, total, descuentos y método de pago.
 - Detalle de líneas de compra, cantidades, precios y precio de referencia.
 - Importación de tickets desde foto con OCR ejecutado en el navegador.
-- Creación de tickets vacíos para introducir manualmente tienda, fecha, total y líneas de producto.
-- Preprocesado local de la imagen (reescalado, contraste y binarización) y OCR multipase.
-- Selección automática de la lectura con más productos válidos, total/fecha detectados y mejor confianza.
+- Importación del ticket digital de Mercadona subiendo el PDF que llega por correo; el texto se extrae directamente del PDF, sin OCR.
+- Creación de tickets vacíos para introducir manualmente tienda, fecha, total y líneas de producto, eligiendo cada producto del catálogo.
+- Preprocesado local de la imagen (reescalado, contraste y binarización adaptativa) y OCR multipase.
+- Lectores específicos para los tickets de Mercadona, Consum y Aldi; el resto de tiendas usa un lector genérico.
+- Las distintas lecturas de una foto se combinan: si un precio sale dudoso, se elige la combinación que cuadra con el total del ticket.
+- Aviso cuando la suma de las líneas no coincide con el total leído.
+- Panel "Ver texto leído" para revisar y copiar el texto que ha reconocido el OCR.
 - La imagen del ticket no se almacena ni en Supabase ni en la aplicación: se usa únicamente durante el OCR y se descarta inmediatamente después.
 - Revisión obligatoria antes de guardar: tienda, fecha, total, conceptos, cantidades, unidades y precios.
 - “Traducción” de conceptos abreviados del ticket a alimentos del catálogo.
@@ -94,9 +103,13 @@ El objetivo del producto es conectar estas cuatro áreas:
 - Notas opcionales.
 - Actualización automática al registrar consumos compatibles.
 
+### Campos numéricos
+
+Todos los campos numéricos aceptan coma o punto decimal y limitan los decimales según su tipo: cantidades y dinero con 2, nutrición con 1, y raciones, minutos y envases como enteros. La base de datos guarda los valores con esa misma precisión.
+
 ## Próximas líneas de evolución
 
-- Ampliar cobertura de tests de lógica de negocio y operaciones de Supabase.
+- Ampliar la cobertura de tests a las operaciones de Supabase y a los componentes.
 - Seguir automatizando el flujo Menú → Compra → Despensa → Consumo.
 - Mejorar la generación y ajuste automático de la lista de compra.
 - Seguir ampliando el reconocimiento de formatos de ticket y sugerencias de equivalencias a partir de tickets reales.
@@ -113,7 +126,8 @@ El objetivo del producto es conectar estas cuatro áreas:
 - GitHub Pages
 - Vitest
 - Tesseract.js para OCR local de tickets
-- GitHub Actions
+- pdf.js para leer los tickets en PDF
+- GitHub Actions y Dependabot
 
 ## Estructura principal
 
@@ -121,9 +135,23 @@ El objetivo del producto es conectar estas cuatro áreas:
 src/
   components/        UI y flujos principales
   lib/               cliente Supabase y lógica compartida
+    domain.ts          unidades, semanas, necesidades de compra y despensa
+    numbers.ts         reglas de los campos numéricos
+    errors.ts          mensajes de error comprensibles
+    receipt.ts         lector genérico de tickets
+    mercadona.ts       ticket de Mercadona (PDF y foto)
+    store-receipts.ts  tickets de Consum y Aldi
+    receipt-merge.ts   combinación de varias lecturas OCR
+    receipt-image.ts   preprocesado de la imagen
+    receipt-pdf.ts     extracción del texto de un PDF
+    __fixtures__/      textos OCR reales usados en los tests
+scripts/
+  copy-ocr-assets.mjs  copia los ficheros del OCR a public/ocr
 supabase/
   migrations/        fuente de verdad del esquema de base de datos
-.github/workflows/   CI y despliegue
+.github/
+  workflows/         CI y despliegue
+  dependabot.yml     actualizaciones automáticas de dependencias
 ```
 
 ## Base de datos
@@ -148,13 +176,25 @@ La migración `20260918000200_reversible_ticket_delete.sql` registra el efecto r
 
 La migración `20260922000100_safe_product_delete.sql` añade el borrado seguro del catálogo de productos. Solo permite eliminar definitivamente productos que no estén referenciados por recetas, planificación, compras o consumos; antes de borrar elimina su posible fila de despensa y equivalencias de ticket.
 
+La migración `20261012000100_add_to_menu_slots.sql` añade la operación que inserta recetas y productos en varias franjas del menú en una sola transacción. Crea las franjas que no existen, conserva lo que ya hay en cada una y omite las marcadas como `Comida fuera`.
+
+La migración `20261012000200_shopping_regenerate.sql` distingue los ítems de la lista generados desde el menú de los añadidos a mano. Así, regenerar la lista solo sustituye los generados pendientes.
+
+La migración `20261012000300_atomic_saves.sql` añade `save_recipe` y `save_menu_slot`, que guardan una receta o una franja completa en una sola transacción: o se guarda todo o no se guarda nada.
+
+La migración `20261012000400_numeric_precision.sql` ajusta la precisión de las columnas numéricas: cantidades y dinero con 2 decimales, precio de referencia (€/kg, €/l) con 2, nutrición con 1 y envases enteros. Redondea los datos existentes.
+
+La migración `20261012000500_security_hardening.sql` refuerza el aislamiento entre usuarios. Las políticas exigen que cualquier fila referenciada (ingrediente, receta, entrada del menú) pertenezca al mismo usuario. Además, las funciones SQL solo pueden ejecutarlas usuarios con sesión iniciada.
+
 ## Desarrollo local
 
 ```bash
-npm install
+npm ci
 cp .env.example .env.local
 npm run dev
 ```
+
+Antes de `dev` y de `build` se ejecuta `scripts/copy-ocr-assets.mjs`. El script copia a `public/ocr/` el worker de Tesseract, el motor WebAssembly y el modelo de español, que vienen del paquete `@tesseract.js-data/spa`. Así la app los sirve desde su propio dominio. La carpeta se genera en cada build y no se versiona. Estos ficheros pesan unos 10 MB y no entran en la caché offline de la PWA: se descargan al leer el primer ticket.
 
 Variables necesarias:
 
@@ -179,7 +219,16 @@ Modo interactivo durante desarrollo:
 npm run test:watch
 ```
 
-Los tests cubren inicialmente lógica de dominio sensible: conversiones de unidades, reglas de visibilidad de despensa y cálculo de semanas. La cobertura se ampliará conforme se extraiga lógica de negocio de los componentes.
+Los tests (38 casos) cubren la lógica que no depende de la interfaz:
+
+- Dominio: conversión de unidades, visibilidad de la despensa, semanas, suma de necesidades, comparación con la despensa y escalado de recetas.
+- Campos numéricos: entrada con coma o punto, decimales, rangos y redondeo.
+- Mensajes de error de Supabase traducidos a texto comprensible.
+- Tickets: lector genérico, PDF y foto de Mercadona, Consum, Aldi, combinación de lecturas y fechas.
+
+Los tests de tickets usan textos OCR reales guardados en `src/lib/__fixtures__/`. Cuando un ticket nuevo se lee mal, conviene añadir su texto como fixture y un test que lo cubra.
+
+Las funciones SQL no tienen tests automáticos. Se prueban en un Postgres local antes de cada migración.
 
 ## Build
 
@@ -187,7 +236,7 @@ Los tests cubren inicialmente lógica de dominio sensible: conversiones de unida
 npm run build
 ```
 
-El build ejecuta TypeScript y genera la aplicación de producción con Vite.
+El build copia los ficheros del OCR, ejecuta TypeScript y genera la aplicación de producción con Vite. El `index.html` generado incluye una política de seguridad de contenido (CSP). Esa política solo permite ejecutar código de la propia app y conectarse a ella misma y al proyecto de Supabase indicado en `VITE_SUPABASE_URL`. La CSP no se aplica en `npm run dev`.
 
 ## CI y despliegue
 
@@ -197,7 +246,7 @@ Los pull requests ejecutan tests y build antes de integrarse.
 
 El flujo de publicación realiza:
 
-1. Instalación de dependencias.
+1. Instalación de dependencias con `npm ci`, usando las versiones exactas de `package-lock.json`.
 2. Tests.
 3. Build.
 4. Publicación en GitHub Pages.
@@ -209,6 +258,17 @@ Secrets necesarios en GitHub:
 
 Las migraciones de Supabase forman parte del código versionado, pero deben estar aplicadas también en la base de datos utilizada por producción cuando incorporan cambios de esquema o funciones SQL.
 
+Dependabot propone cada semana actualizaciones de npm y cada mes actualizaciones de las GitHub Actions.
+
+## Seguridad
+
+- Cada tabla tiene Row Level Security por `user_id`. Las referencias entre tablas también se comprueban, de modo que nadie puede enlazar sus filas con datos de otro usuario.
+- Las funciones SQL se ejecutan con los permisos del usuario (`security invoker`), fijan su `search_path` y comprueban `auth.uid()`. Solo el rol `authenticated` puede ejecutarlas.
+- La app solo usa la clave publicable de Supabase. Nunca se debe usar la clave de servicio en el frontend.
+- El registro público de usuarios debe estar desactivado en Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").
+- Las imágenes y los PDF de los tickets solo se procesan en el navegador y no se guardan en ningún sitio.
+- La CSP y el OCR servido desde el propio dominio evitan cargar código de terceros en tiempo de ejecución.
+
 ## Estrategia de desarrollo
 
-Los cambios se desarrollan en ramas `agent/*` y se integran en `main` mediante pull request. `main` representa la versión desplegable de la aplicación.
+Los cambios se desarrollan en ramas de trabajo y se integran en `main` mediante pull request. `main` representa la versión desplegable de la aplicación.
