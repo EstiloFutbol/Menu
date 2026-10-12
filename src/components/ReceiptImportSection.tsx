@@ -3,6 +3,8 @@ import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
 import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeDecimalInput, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText } from '../lib/receipt'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
+import { convertCompatibleQuantity } from '../lib/domain'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -36,15 +38,6 @@ function lineId(index: number) {
   return `receipt-line-${Date.now()}-${index}`
 }
 
-function compatibleQuantity(quantity: number, from: Unit, to: Unit) {
-  if (from === to) return quantity
-  if (from === 'g' && to === 'kg') return quantity / 1000
-  if (from === 'kg' && to === 'g') return quantity * 1000
-  if (from === 'ml' && to === 'l') return quantity / 1000
-  if (from === 'l' && to === 'ml') return quantity * 1000
-  return null
-}
-
 export default function ReceiptImportSection() {
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [aliases, setAliases] = useState<Alias[]>([])
@@ -68,7 +61,7 @@ export default function ReceiptImportSection() {
       supabase.from('pantry_items').select('ingredient_id,quantity,unit,status'),
     ])
     if (ingredientsResult.error || aliasesResult.error || pantryResult.error) {
-      setError(ingredientsResult.error?.message ?? aliasesResult.error?.message ?? pantryResult.error?.message ?? 'No se pudo preparar la importación.')
+      setError(friendlyError(ingredientsResult.error ?? aliasesResult.error ?? pantryResult.error, 'No se pudo preparar la importación.'))
       return
     }
     setIngredients((ingredientsResult.data ?? []) as Ingredient[])
@@ -163,7 +156,7 @@ export default function ReceiptImportSection() {
       if (store) setStoreName(store)
       setProgress('')
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : 'No se pudo leer el ticket.')
+      setError(friendlyError(cause, 'No se pudo leer el ticket.'))
       setProgress('')
     } finally {
       if (worker) await worker.terminate()
@@ -239,7 +232,7 @@ export default function ReceiptImportSection() {
     if (current.quantity == null) return 'Ahora se controla por estado: se marcará como “Tengo”.'
     const quantity = parseDecimalInput(line.quantity)
     if (quantity == null) return 'Cantidad inválida.'
-    const converted = compatibleQuantity(quantity, line.unit, current.unit ?? line.unit)
+    const converted = convertCompatibleQuantity(quantity, line.unit, current.unit ?? line.unit)
     if (converted == null) return 'Unidad incompatible con la despensa actual. Cámbiala antes de importar.'
     return `Se sumará a ${current.quantity} ${current.unit ?? ''} existentes.`
   }
@@ -284,7 +277,7 @@ export default function ReceiptImportSection() {
     })
     setSaving(false)
 
-    if (importError) { setError(importError.message); return }
+    if (importError) { setError(friendlyError(importError, 'No se pudo importar el ticket.')); return }
     setSuccess(`Ticket importado. ${selectedLines.filter((line) => line.addToPantry).length} productos actualizados en la despensa.`)
     await loadReferenceData()
   }

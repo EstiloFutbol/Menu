@@ -1,5 +1,7 @@
 import { AlertTriangle, CheckCircle2, X } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { convertCompatibleQuantity, formatQuantity } from '../lib/domain'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -34,19 +36,6 @@ type Props = {
   servings: number
   onClose: () => void
   onCompleted: () => void
-}
-
-function formatNumber(value: number) {
-  return value.toLocaleString('es-ES', { maximumFractionDigits: 3 })
-}
-
-function compatible(quantity: number, from: Unit, to: Unit) {
-  if (from === to) return quantity
-  if (from === 'g' && to === 'kg') return quantity / 1000
-  if (from === 'kg' && to === 'g') return quantity * 1000
-  if (from === 'ml' && to === 'l') return quantity / 1000
-  if (from === 'l' && to === 'ml') return quantity * 1000
-  return null
 }
 
 export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeName, servings, onClose, onCompleted }: Props) {
@@ -102,7 +91,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
           })),
         )
       } catch (cause) {
-        setError(cause instanceof Error ? cause.message : 'No se pudo preparar el consumo.')
+        setError(friendlyError(cause, 'No se pudo preparar el consumo.'))
       } finally {
         setLoading(false)
       }
@@ -115,7 +104,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
     () => items.filter((item) => {
       if (!item.pantry) return true
       if (item.pantry.quantity === null || !item.pantry.unit) return true
-      return compatible(Number(item.quantity || 0), item.unit, item.pantry.unit) === null
+      return convertCompatibleQuantity(Number(item.quantity || 0), item.unit, item.pantry.unit) === null
     }).length,
     [items],
   )
@@ -143,8 +132,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
       if (rpcError) throw rpcError
       onCompleted()
     } catch (cause) {
-      const message = cause instanceof Error ? cause.message : 'No se pudo completar la receta.'
-      setError(message.includes('already been completed') ? 'Esta planificación ya estaba completada. No se ha descontado nada de nuevo.' : message)
+      setError(friendlyError(cause, 'No se pudo completar la receta.'))
     } finally {
       setSaving(false)
     }
@@ -157,7 +145,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
           <div>
             <p className="text-sm font-medium text-neutral-500">Confirmar consumo</p>
             <h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{recipeName}</h2>
-            <p className="mt-1 text-sm text-neutral-500">{formatNumber(servings)} {servings === 1 ? 'ración' : 'raciones'}</p>
+            <p className="mt-1 text-sm text-neutral-500">{formatQuantity(servings, 3)} {servings === 1 ? 'ración' : 'raciones'}</p>
           </div>
           <button disabled={saving} onClick={onClose} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar">
             <X size={19} />
@@ -177,7 +165,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
             )}
             {items.map((item, index) => {
               const exact = item.pantry?.quantity !== null && item.pantry?.quantity !== undefined && item.pantry?.unit
-              const converted = exact ? compatible(Number(item.quantity || 0), item.unit, item.pantry!.unit!) : null
+              const converted = exact ? convertCompatibleQuantity(Number(item.quantity || 0), item.unit, item.pantry!.unit!) : null
               const canDeduct = converted !== null && converted !== undefined
               return (
                 <div key={item.ingredientId} className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
@@ -188,7 +176,7 @@ export default function CompleteRecipeModal({ plannedRecipeId, recipeId, recipeN
                         {!item.pantry
                           ? 'No está en despensa'
                           : exact
-                            ? `Despensa: ${formatNumber(Number(item.pantry.quantity))} ${item.pantry.unit}`
+                            ? `Despensa: ${formatQuantity(Number(item.pantry.quantity), 3)} ${item.pantry.unit}`
                             : `Despensa: ${item.pantry.status === 'queda_poco' ? 'Queda poco' : item.pantry.status === 'no_tengo' ? 'No tengo' : 'Tengo'}`}
                       </p>
                     </div>

@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronUp, MapPin, Pencil, ReceiptText, Store, Trash2, X } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -148,7 +149,7 @@ export default function PurchaseHistorySection() {
       supabase.from('ingredients').select('id,name').order('name'),
     ])
 
-    if (queryError || ingredientError) setError(queryError?.message ?? ingredientError?.message ?? 'No se pudo cargar el historial.')
+    if (queryError || ingredientError) setError(friendlyError(queryError ?? ingredientError, 'No se pudo cargar el historial.'))
     else {
       setPurchases((data ?? []) as unknown as Purchase[])
       setIngredients((ingredientData ?? []) as Ingredient[])
@@ -220,7 +221,7 @@ export default function PurchaseHistorySection() {
       notes: purchaseForm.notes.trim() || null,
     }).eq('id', editingPurchase.id)
     setSaving(false)
-    if (updateError) { setError(updateError.message); return }
+    if (updateError) { setError(friendlyError(updateError, 'No se pudo guardar el ticket.')); return }
     setEditingPurchase(null)
     setPurchaseForm(null)
     await load()
@@ -258,7 +259,7 @@ export default function PurchaseHistorySection() {
       notes: itemForm.notes.trim() || null,
     }).eq('id', editingItem.item.id)
     setSaving(false)
-    if (updateError) { setError(updateError.message); return }
+    if (updateError) { setError(friendlyError(updateError, 'No se pudo guardar la línea.')); return }
     setEditingItem(null)
     setItemForm(null)
     await load()
@@ -272,7 +273,7 @@ export default function PurchaseHistorySection() {
     if (!window.confirm(`¿Eliminar “${item.raw_name}” de este ticket?${pantryMessage}`)) return
     setError('')
     const { error: deleteError } = await supabase.rpc('delete_purchase_item_and_reverse_pantry', { p_purchase_item_id: item.id })
-    if (deleteError) { setError(deleteError.message); return }
+    if (deleteError) { setError(friendlyError(deleteError, 'No se pudo eliminar la línea.')); return }
     await load()
   }
 
@@ -288,17 +289,18 @@ export default function PurchaseHistorySection() {
     setError('')
     const { error: deleteError } = await supabase.rpc('delete_purchase_and_reverse_pantry', { p_purchase_id: purchase.id })
     setDeletingPurchaseId(null)
-    if (deleteError) { setError(deleteError.message); return }
+    if (deleteError) { setError(friendlyError(deleteError, 'No se pudo eliminar el ticket.')); return }
     if (openPurchase === purchase.id) setOpenPurchase(null)
     await load()
   }
 
   async function deleteIngredient(ingredient: Ingredient) {
-    if (!supabase || !window.confirm(`¿Eliminar “${ingredient.name}” del catálogo de alimentos? También se eliminará de la despensa si está allí.`)) return
+    if (!supabase || !window.confirm(`¿Eliminar “${ingredient.name}” del catálogo? Si ya se ha usado en recetas, compras, menú o consumos, se conservará para proteger el histórico.`)) return
     setError('')
-    const { error: deleteError } = await supabase.from('ingredients').delete().eq('id', ingredient.id)
+    // Mismo borrado seguro que el catálogo de Despensa: solo elimina productos sin uso.
+    const { error: deleteError } = await supabase.rpc('delete_unused_ingredient', { p_ingredient_id: ingredient.id })
     if (deleteError) {
-      setError(deleteError.message.includes('foreign key') ? 'No se puede eliminar porque este alimento está utilizado en una receta o consumo. Puedes cambiarle el nombre desde Recetas/Despensa.' : deleteError.message)
+      setError(friendlyError(deleteError, 'No se pudo eliminar el producto.'))
       return
     }
     if (itemForm) setItemForm((current) => current ? { ...current, ingredient_id: '' } : current)

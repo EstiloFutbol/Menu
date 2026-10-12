@@ -1,7 +1,8 @@
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, Plus, RefreshCw, ShoppingBasket, Trash2 } from 'lucide-react'
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { aggregateNeeds, compareNeedWithPantry, pendingPlannedLines, type PlanEntryForNeeds } from '../lib/domain'
+import { addDays, aggregateNeeds, areUnitsCompatible, compareNeedWithPantry, convertCompatibleQuantity, formatQuantity, formatWeekRange, fromBaseQuantity, localDateString, pendingPlannedLines, startOfWeek, toBaseQuantity, type PlanEntryForNeeds } from '../lib/domain'
 import { normalizeDecimalInput, parseDecimalInput } from '../lib/receipt'
+import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -48,65 +49,6 @@ const categoryOrder = [
   'Otros',
 ]
 
-function startOfWeek(date: Date) {
-  const next = new Date(date)
-  const day = next.getDay() || 7
-  next.setHours(12, 0, 0, 0)
-  next.setDate(next.getDate() - day + 1)
-  return next
-}
-
-function addDays(date: Date, days: number) {
-  const next = new Date(date)
-  next.setDate(next.getDate() + days)
-  return next
-}
-
-function isoDate(date: Date) {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
-}
-
-function formatWeek(start: Date) {
-  const end = addDays(start, 6)
-  const formatter = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' })
-  return `${formatter.format(start)} – ${formatter.format(end)}`
-}
-
-function toBase(quantity: number, unit: Unit): { quantity: number; unit: Unit } {
-  if (unit === 'kg') return { quantity: quantity * 1000, unit: 'g' }
-  if (unit === 'l') return { quantity: quantity * 1000, unit: 'ml' }
-  return { quantity, unit }
-}
-
-function fromBase(quantity: number, baseUnit: Unit): { quantity: number; unit: Unit } {
-  if (baseUnit === 'g' && quantity >= 1000) return { quantity: quantity / 1000, unit: 'kg' }
-  if (baseUnit === 'ml' && quantity >= 1000) return { quantity: quantity / 1000, unit: 'l' }
-  return { quantity, unit: baseUnit }
-}
-
-function areCompatible(a: Unit, b: Unit) {
-  const weight = new Set<Unit>(['g', 'kg'])
-  const volume = new Set<Unit>(['ml', 'l'])
-  if (weight.has(a) && weight.has(b)) return true
-  if (volume.has(a) && volume.has(b)) return true
-  return a === b
-}
-
-function convertQuantity(quantity: number, from: Unit, to: Unit) {
-  if (!areCompatible(from, to)) return null
-  const base = toBase(quantity, from)
-  if (to === 'kg' && base.unit === 'g') return base.quantity / 1000
-  if (to === 'l' && base.unit === 'ml') return base.quantity / 1000
-  return base.quantity
-}
-
-function formatQuantity(value: number) {
-  return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value)
-}
-
 function ShoppingSection() {
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
   const [listId, setListId] = useState<string | null>(null)
@@ -130,11 +72,11 @@ function ShoppingSection() {
     const { data: list, error: listError } = await supabase
       .from('shopping_lists')
       .select('id')
-      .eq('week_start', isoDate(weekStart))
+      .eq('week_start', localDateString(weekStart))
       .maybeSingle()
 
     if (listError) {
-      setError(listError.message)
+      setError(friendlyError(listError, 'No se pudo cargar la lista.'))
       setLoading(false)
       return
     }
@@ -164,7 +106,7 @@ function ShoppingSection() {
       .eq('shopping_list_id', list.id)
       .order('sort_order')
 
-    if (itemsError) setError(itemsError.message)
+    if (itemsError) setError(friendlyError(itemsError, 'No se pudo cargar la lista.'))
     else setItems((data ?? []) as unknown as ShoppingItem[])
     setLoading(false)
   }, [weekStart])
@@ -180,7 +122,7 @@ function ShoppingSection() {
       .select('id,name,category,default_unit')
       .order('name')
       .then(({ data, error: ingredientsError }) => {
-        if (ingredientsError) setError(ingredientsError.message)
+        if (ingredientsError) setError(friendlyError(ingredientsError, 'No se pudieron cargar los productos.'))
         else setIngredients((data ?? []) as Ingredient[])
       })
   }, [])
@@ -195,7 +137,7 @@ function ShoppingSection() {
 
     const { data, error: createError } = await supabase
       .from('shopping_lists')
-      .insert({ user_id: userId, week_start: isoDate(weekStart) })
+      .insert({ user_id: userId, week_start: localDateString(weekStart) })
       .select('id')
       .single()
 
@@ -211,8 +153,8 @@ function ShoppingSection() {
     setMessage('')
 
     try {
-      const start = isoDate(weekStart)
-      const end = isoDate(addDays(weekStart, 6))
+      const start = localDateString(weekStart)
+      const end = localDateString(addDays(weekStart, 6))
 
       const { data: menuData, error: menuError } = await supabase
         .from('menu_entries')
@@ -279,12 +221,12 @@ function ShoppingSection() {
         let quantityNeeded = comparison.missing
 
         for (const kept of keptByIngredient.get(need.ingredientId) ?? []) {
-          if (!areCompatible(kept.unit, need.baseUnit)) continue
-          quantityNeeded = Math.max(0, quantityNeeded - toBase(kept.quantity, kept.unit).quantity)
+          if (!areUnitsCompatible(kept.unit, need.baseUnit)) continue
+          quantityNeeded = Math.max(0, quantityNeeded - toBaseQuantity(kept.quantity, kept.unit).quantity)
         }
 
         if (quantityNeeded <= 0) continue
-        const display = fromBase(quantityNeeded, need.baseUnit)
+        const display = fromBaseQuantity(quantityNeeded, need.baseUnit)
         generatedRows.push({
           ingredient_id: need.ingredientId,
           quantity: display.quantity,
@@ -294,7 +236,7 @@ function ShoppingSection() {
       }
 
       const { data: regeneratedListId, error: regenerateError } = await supabase.rpc('regenerate_shopping_list', {
-        p_week_start: isoDate(weekStart),
+        p_week_start: localDateString(weekStart),
         p_items: generatedRows,
       })
       if (regenerateError) throw regenerateError
@@ -304,7 +246,7 @@ function ShoppingSection() {
       setMessage(`${generatedRows.length ? 'Lista generada a partir del menú y la despensa.' : 'No necesitas comprar nada más del menú para esta semana.'}${keptCount ? ` Se han conservado ${keptCount} producto${keptCount === 1 ? '' : 's'} añadido${keptCount === 1 ? '' : 's'} a mano o ya comprado${keptCount === 1 ? '' : 's'}.` : ''}`)
       await loadList()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se ha podido generar la lista.')
+      setError(friendlyError(caught, 'No se ha podido generar la lista.'))
     } finally {
       setGenerating(false)
     }
@@ -316,7 +258,7 @@ function ShoppingSection() {
     setItems((current) => current.map((candidate) => candidate.id === item.id ? { ...candidate, checked: next } : candidate))
     const { error: updateError } = await supabase.from('shopping_items').update({ checked: next }).eq('id', item.id)
     if (updateError) {
-      setError(updateError.message)
+      setError(friendlyError(updateError, 'No se pudo actualizar el producto.'))
       await loadList()
     }
   }
@@ -324,7 +266,7 @@ function ShoppingSection() {
   const deleteItem = async (id: string) => {
     if (!supabase) return
     const { error: deleteError } = await supabase.from('shopping_items').delete().eq('id', id)
-    if (deleteError) setError(deleteError.message)
+    if (deleteError) setError(friendlyError(deleteError, 'No se pudo eliminar el producto.'))
     else setItems((current) => current.filter((item) => item.id !== id))
   }
 
@@ -381,7 +323,7 @@ function ShoppingSection() {
       setShowManual(false)
       await loadList()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se ha podido añadir el producto.')
+      setError(friendlyError(caught, 'No se ha podido añadir el producto.'))
     }
   }
 
@@ -411,8 +353,8 @@ function ShoppingSection() {
 
       for (const item of purchased) {
         const existing = pantryByIngredient.get(item.ingredient_id!)
-        if (existing && existing.quantity != null && existing.unit && areCompatible(item.unit!, existing.unit)) {
-          const converted = convertQuantity(Number(item.quantity), item.unit!, existing.unit)
+        if (existing && existing.quantity != null && existing.unit && areUnitsCompatible(item.unit!, existing.unit)) {
+          const converted = convertCompatibleQuantity(Number(item.quantity), item.unit!, existing.unit)
           if (converted == null) continue
           const { error: updateError } = await supabase
             .from('pantry_items')
@@ -444,7 +386,7 @@ function ShoppingSection() {
       setMessage(`Añadidos ${purchased.length} producto${purchased.length === 1 ? '' : 's'} a la despensa.${manualSkipped ? ` ${manualSkipped} elemento${manualSkipped === 1 ? '' : 's'} manual${manualSkipped === 1 ? '' : 'es'} no se ha añadido automáticamente.` : ''}`)
       await loadList()
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'No se han podido añadir los productos a la despensa.')
+      setError(friendlyError(caught, 'No se han podido añadir los productos a la despensa.'))
     } finally {
       setAddingToPantry(false)
     }
@@ -474,7 +416,7 @@ function ShoppingSection() {
         <div>
           <p className="text-sm font-medium text-neutral-500">Semana de compra</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Lista de la compra</h1>
-          <p className="mt-1 text-sm text-neutral-500">{formatWeek(weekStart)}</p>
+          <p className="mt-1 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setWeekStart((current) => addDays(current, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600"><ChevronLeft size={18} /></button>

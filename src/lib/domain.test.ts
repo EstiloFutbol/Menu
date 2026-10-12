@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from './domain'
+import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, formatBaseQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from './domain'
 
 describe('convertCompatibleQuantity', () => {
   it('converts mass and volume units', () => {
@@ -98,5 +98,13 @@ describe('pendingPlannedLines', () => {
       { ingredientId: 'arroz', quantity: 200, unit: 'g' },
       { ingredientId: 'yogur', quantity: 1, unit: 'unidad' },
     ])
+  })
+})
+
+describe('formatBaseQuantity', () => {
+  it('shows large base quantities in kg or l with Spanish decimals', () => {
+    expect(formatBaseQuantity(1500, 'g')).toBe('1,5 kg')
+    expect(formatBaseQuantity(250, 'ml')).toBe('250 ml')
+    expect(formatBaseQuantity(3, 'unidad')).toBe('3 unidad')
   })
 })
