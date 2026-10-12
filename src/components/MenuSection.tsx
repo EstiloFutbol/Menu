@@ -1,6 +1,6 @@
-import { AlertTriangle, CheckCircle2, ChevronLeft, ChevronRight, Copy, LockKeyhole, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react'
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ClipboardList, Copy, LockKeyhole, Plus, Trash2, UtensilsCrossed, X } from 'lucide-react'
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
-import { addDays, convertCompatibleQuantity, localDateString, shouldShowPantryItem, startOfWeek } from '../lib/domain'
+import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from '../lib/domain'
 import { supabase } from '../lib/supabase'
 import CompleteProductModal from './CompleteProductModal'
 import CompleteRecipeModal from './CompleteRecipeModal'
@@ -18,7 +18,7 @@ type Unit = 'g' | 'kg' | 'ml' | 'l' | 'unidad' | 'cucharada' | 'cucharadita' | '
 const units: Unit[] = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete']
 type Recipe = { id: string; name: string; base_servings: number }
 type Ingredient = { id: string; name: string; category: string | null; default_unit: Unit | null }
-type PlannedRecipe = { id: string; recipe_id: string; servings: number; sort_order: number; recipe: { id: string; name: string } | null }
+type PlannedRecipe = { id: string; recipe_id: string; servings: number; sort_order: number; recipe: { id: string; name: string; base_servings: number; recipe_ingredients: { ingredient_id: string; quantity: number; unit: Unit }[] } | null }
 type PlannedProduct = { id: string; ingredient_id: string; quantity: number; unit: Unit; sort_order: number; ingredient: Ingredient | null }
 type ConsumptionLog = { id: string; recipe_id: string | null; menu_entry_recipe_id: string | null; menu_entry_product_id: string | null; consumed_at: string }
 type MenuEntry = { id: string; planned_date: string; meal: MealType; is_eating_out: boolean; completed_at: string | null; menu_entry_recipes: PlannedRecipe[]; menu_entry_products: PlannedProduct[]; consumption_logs: ConsumptionLog[] }
@@ -38,6 +38,12 @@ function formatShortDate(value: string) { return new Intl.DateTimeFormat('es-ES'
 function formatWeekRange(start: Date) { const formatter = new Intl.DateTimeFormat('es-ES', { day: 'numeric', month: 'short' }); return `${formatter.format(start)} – ${formatter.format(addDays(start, 6))}` }
 function slotKey(date: string, meal: MealType) { return `${date}:${meal}` }
 function formatQuantity(value: number) { return new Intl.NumberFormat('es-ES', { maximumFractionDigits: 2 }).format(value) }
+// Muestra una cantidad en unidad base (g, ml…) pasando a kg o l a partir de 1000.
+function formatBaseQuantity(value: number, unit: Unit) {
+  if (unit === 'g' && value >= 1000) return `${formatQuantity(value / 1000)} kg`
+  if (unit === 'ml' && value >= 1000) return `${formatQuantity(value / 1000)} l`
+  return `${formatQuantity(value)} ${unit}`
+}
 function pantryShortfall(item: SlotDraftProduct, pantryRow: PantryRow | undefined) {
   if (item.locked || !pantryRow || pantryRow.quantity == null || !pantryRow.unit) return null
   const planned = convertCompatibleQuantity(Number(item.quantity), item.unit, pantryRow.unit)
@@ -82,10 +88,20 @@ export default function MenuSection() {
   const [completionTarget, setCompletionTarget] = useState<CompletionTarget | null>(null)
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null)
   const [notice, setNotice] = useState('')
+  const [showSummary, setShowSummary] = useState(false)
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => { const date = addDays(weekStart, index); return { date: localDateString(date), label: dayLabels[index] } }), [weekStart])
   const entriesBySlot = useMemo(() => { const map = new Map<string, MenuEntry>(); entries.forEach((entry) => map.set(slotKey(entry.planned_date, entry.meal), entry)); return map }, [entries])
   const pantryByIngredient = useMemo(() => new Map(pantry.map((row) => [row.ingredient_id, row])), [pantry])
+  // Resumen semanal: lo pendiente del menú comparado con la despensa, con el mismo cálculo que la lista de la compra.
+  const weekSummary = useMemo(() => {
+    const names = new Map(ingredients.map((ingredient) => [ingredient.id, ingredient.name]))
+    return aggregateNeeds(pendingPlannedLines(entries))
+      .map((need) => ({ need, name: names.get(need.ingredientId) ?? 'Producto', comparison: compareNeedWithPantry(need, pantryByIngredient.get(need.ingredientId)) }))
+      .sort((a, b) => Number(b.comparison.missing > 0) - Number(a.comparison.missing > 0) || a.name.localeCompare(b.name, 'es'))
+  }, [entries, ingredients, pantryByIngredient])
+  const summaryMissing = weekSummary.filter((row) => row.comparison.missing > 0 && !row.comparison.pantryCheckRequired).length
+  const summaryToCheck = weekSummary.filter((row) => row.comparison.pantryCheckRequired).length
   const availableIngredients = useMemo(() => ingredients.filter((ingredient) => { const row = pantryByIngredient.get(ingredient.id); return row ? shouldShowPantryItem(row) : false }), [ingredients, pantryByIngredient])
 
   const loadRecipes = useCallback(async () => { if (!supabase) return; const { data, error: queryError } = await supabase.from('recipes').select('id,name,base_servings').order('name'); if (queryError) throw queryError; setRecipes((data ?? []) as Recipe[]) }, [])
@@ -96,7 +112,7 @@ export default function MenuSection() {
     setLoading(true); setError('')
     try {
       const from = localDateString(weekStart); const to = localDateString(addDays(weekStart, 6))
-      const { data, error: queryError } = await supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out,completed_at,menu_entry_recipes(id,recipe_id,servings,sort_order,recipe:recipes(id,name)),menu_entry_products(id,ingredient_id,quantity,unit,sort_order,ingredient:ingredients(id,name,category,default_unit)),consumption_logs(id,recipe_id,menu_entry_recipe_id,menu_entry_product_id,consumed_at)').gte('planned_date', from).lte('planned_date', to).order('planned_date')
+      const { data, error: queryError } = await supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out,completed_at,menu_entry_recipes(id,recipe_id,servings,sort_order,recipe:recipes(id,name,base_servings,recipe_ingredients(ingredient_id,quantity,unit))),menu_entry_products(id,ingredient_id,quantity,unit,sort_order,ingredient:ingredients(id,name,category,default_unit)),consumption_logs(id,recipe_id,menu_entry_recipe_id,menu_entry_product_id,consumed_at)').gte('planned_date', from).lte('planned_date', to).order('planned_date')
       if (queryError) throw queryError
       setEntries((data ?? []) as unknown as MenuEntry[])
     } catch (cause) { setError(cause instanceof Error ? cause.message : 'No se pudo cargar el menú.') } finally { setLoading(false) }
@@ -276,6 +292,14 @@ export default function MenuSection() {
   return <div className="space-y-5">
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-medium text-neutral-500">Planificación semanal</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Tu menú</h1><p className="mt-2 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p></div><div className="flex gap-2"><button onClick={() => setWeekStart(addDays(weekStart, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana anterior"><ChevronLeft size={18} /></button><button onClick={() => { setWeekStart(startOfWeek(new Date())); setMobileDay(Math.max(0, Math.min(6, (new Date().getDay() || 7) - 1))) }} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm">Esta semana</button><button onClick={() => setWeekStart(addDays(weekStart, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana siguiente"><ChevronRight size={18} /></button></div></header>
     {notice && <div className="flex items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><span>{notice}</span><button onClick={() => setNotice('')} className="shrink-0 text-amber-700" aria-label="Cerrar aviso"><X size={16} /></button></div>}
+    {!loading && weekSummary.length > 0 && <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+      <button onClick={() => setShowSummary(!showSummary)} aria-expanded={showSummary} className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5"><ClipboardList size={18} className="shrink-0 text-neutral-500" /><span className="min-w-0 flex-1"><span className="block text-sm font-semibold text-neutral-900">Resumen de la semana</span><span className="block text-xs text-neutral-500">{summaryMissing || summaryToCheck ? [summaryMissing ? `${summaryMissing} por comprar` : '', summaryToCheck ? `${summaryToCheck} por revisar en despensa` : ''].filter(Boolean).join(' · ') : 'Tienes todo lo pendiente en despensa'}</span></span><ChevronDown size={16} className={`shrink-0 text-neutral-400 transition ${showSummary ? 'rotate-180' : ''}`} /></button>
+      {showSummary && <div className="border-t border-neutral-100">
+        <div className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,80px))] gap-2 bg-neutral-50 px-4 py-2 text-[11px] font-medium uppercase tracking-wide text-neutral-400 sm:px-5"><span>Producto</span><span className="text-right">Necesitas</span><span className="text-right">Tienes</span><span className="text-right">Falta</span></div>
+        <div className="divide-y divide-neutral-100">{weekSummary.map(({ need, name, comparison }) => <div key={`${need.ingredientId}:${need.baseUnit}`} className="grid grid-cols-[minmax(0,1fr)_repeat(3,minmax(0,80px))] items-center gap-2 px-4 py-2 text-sm sm:px-5"><span className="truncate text-neutral-800">{name}</span><span className="text-right text-neutral-600">{formatBaseQuantity(need.needed, need.baseUnit)}</span><span className="text-right text-neutral-600">{comparison.have == null ? '¿?' : formatBaseQuantity(comparison.have, need.baseUnit)}</span><span className={`text-right font-medium ${comparison.pantryCheckRequired ? 'text-amber-700' : comparison.missing > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{comparison.pantryCheckRequired ? 'Revisar' : comparison.missing > 0 ? formatBaseQuantity(comparison.missing, need.baseUnit) : 'OK'}</span></div>)}</div>
+        <p className="border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400 sm:px-5">Solo cuenta lo que aún no has consumido. “Revisar” significa que la despensa no tiene una cantidad comparable.</p>
+      </div>}
+    </section>}
     {error && !draft && !completionTarget && !copyTarget && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {loading ? <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-sm text-neutral-500 shadow-sm">Cargando menú…</div> : <>
       <div className="lg:hidden">
