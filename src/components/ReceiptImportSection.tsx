@@ -138,7 +138,14 @@ export default function ReceiptImportSection() {
 
     try {
       const variants = await buildReceiptImageVariants(file)
-      worker = await createWorker('spa')
+      // Los ficheros del OCR se sirven desde la propia app (los copia scripts/copy-ocr-assets.mjs).
+      const ocrBase = new URL(`${import.meta.env.BASE_URL}ocr/`, window.location.origin).href
+      worker = await createWorker('spa', 1, {
+        workerPath: `${ocrBase}worker.min.js`,
+        corePath: ocrBase,
+        langPath: `${ocrBase}lang`,
+        workerBlobURL: false,
+      })
       await worker.setParameters({
         tessedit_pageseg_mode: '6',
         preserve_interword_spaces: '1',
