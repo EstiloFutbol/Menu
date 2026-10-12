@@ -99,7 +99,12 @@ function PantrySection() {
       ingredientId = createdIngredient.id
     }
     const payload = { user_id: authData.user.id, ingredient_id: ingredientId, quantity: form.mode === 'quantity' ? Number(form.quantity) : null, unit: form.mode === 'quantity' ? form.unit : null, status: form.mode === 'status' ? form.status : null, notes: form.notes.trim() || null }
-    const result = editingId ? await supabase.from('pantry_items').update(payload).eq('id', editingId) : await supabase.from('pantry_items').insert(payload)
+    // Los productos con cantidad 0 o "No tengo" siguen guardados aunque estén ocultos:
+    // si el ingrediente ya tiene una fila oculta, se reutiliza en vez de crear otra.
+    const existing = editingId ? undefined : items.find((item) => item.ingredient.id === ingredientId)
+    if (existing && shouldShowPantryItem(existing)) { setError('Ese ingrediente ya está en tu despensa.'); setSaving(false); return }
+    const targetId = editingId ?? existing?.id
+    const result = targetId ? await supabase.from('pantry_items').update(payload).eq('id', targetId) : await supabase.from('pantry_items').insert(payload)
     if (result.error) { setError(friendlyError(result.error, 'No se pudo guardar en la despensa.', { duplicate: 'Ese ingrediente ya está en tu despensa.' })); setSaving(false); return }
     setSaving(false); setFormOpen(false); await loadData()
   }
