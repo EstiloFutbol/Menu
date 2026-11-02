@@ -1,6 +1,7 @@
 # Plantilla: copia este archivo a .github/workflows/bots.yml en cada proyecto y ajusta
 # REVIEW_TOOLS (los comandos de comprobación que el Revisor puede ejecutar en ese repo).
-# Las normas de los bots viven en el CLAUDE.md de cada proyecto (ver templates/CLAUDE.proyecto.md).
+# Las normas de los bots viven en BOT_RULES (por defecto CLAUDE.md; ver templates/CLAUDE.proyecto.md).
+# Si el repo ignora CLAUDE.md (p. ej. repos públicos), usa .github/BOTS.md.
 #
 # Uso:
 #   · Desarrollador: pon la etiqueta "bot:desarrollar" a una issue, o comenta "@claude <qué hacer>".
@@ -19,6 +20,8 @@ on:
 
 env:
   REVIEW_TOOLS: 'Bash(npm ci),Bash(npm test),Bash(npm run build)'
+  # Archivo con el stack, los comandos y las normas para los bots.
+  BOT_RULES: 'CLAUDE.md'
 
 # Un bot a la vez por repo.
 concurrency:
@@ -64,6 +67,7 @@ jobs:
             --model sonnet
             --max-turns 40
             --allowedTools "${{ env.REVIEW_TOOLS }}"
+            --append-system-prompt "Antes de empezar, lee y sigue ${{ env.BOT_RULES }} (stack, comandos y Normas para los bots). Escribe en español."
 
   revisor:
     if: >-
@@ -108,10 +112,10 @@ jobs:
             --allowedTools "Read,Glob,Grep,Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr comment:*),${{ env.REVIEW_TOOLS }}"
           prompt: |
             Repositorio: ${{ github.repository }} · PR número ${{ env.PR }}.
-            Eres el Revisor/a de código y QA de la empresa. Sigue la sección "Normas para los bots → Revisor"
-            del CLAUDE.md de este repo. Pasos:
+            Eres el Revisor/a de código y QA de la empresa. Lee ${{ env.BOT_RULES }} y sigue su sección
+            "Normas para los bots → Revisor". Pasos:
             1. Lee la PR (gh pr view ${{ env.PR }}) y su diff (gh pr diff ${{ env.PR }}).
-            2. Ejecuta las comprobaciones del CLAUDE.md que tengas permitidas.
+            2. Ejecuta las comprobaciones de ${{ env.BOT_RULES }} que tengas permitidas.
             3. Publica UN solo comentario con gh pr comment ${{ env.PR }} --body "...", en español, con:
                veredicto (✅ listo / ⚠️ cambios menores / ❌ no mergear), hallazgos con archivo:línea,
                por qué importan y cómo arreglarlos, y el resultado de las comprobaciones.
