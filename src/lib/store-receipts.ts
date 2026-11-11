@@ -1,5 +1,5 @@
 import { isMercadonaReceipt, parseMercadonaReceipt, type ParsedStoreReceipt } from './mercadona'
-import { cleanItemName, extractReceiptDate, normalizeOcrPrices, parseQuantityFirstItem, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
+import { cleanItemName, extractReceiptDate, normalizeOcrPrices, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
 
 export type { ParsedStoreReceipt }
 
@@ -14,22 +14,56 @@ function lastPrice(line: string) {
 
 const round2 = (value: number) => Math.round(value * 100) / 100
 
-// Consum: "CANT ARTICULO PVP EUROS", líneas "1 CEBOLLA SECA TUBO 1,99" y el total
-// en "Total factura" o "IMPORTE A ABONAR".
+// Consum (y Charter, su franquicia): "CANT ARTICULO PVP EUROS", líneas
+// "1 CEBOLLA SECA TUBO 1,99", descuentos de ticket ("Descuento mensual -5,63") y
+// el total en "Total factura" o "IMPORTE A ABONAR".
 export function isConsumReceipt(text: string) {
-  return /\bconsum\b/i.test(text) || /importe a abonar|cant\.? art[ií]culo/i.test(text)
+  return /\b(consum|charter)\b/i.test(text) || /importe a abonar|cant\.? art[ií]culo|socio-?cliente|total factura/i.test(text)
+}
+
+// Lo que el OCR suele leer en lugar del "1" de la cantidad: "$", "|", "I", "l", "!", "A", "E"…
+const misreadOne = String.raw`[$|Il!iAEJ]`
+// Línea de producto de Consum. Tolera ruido antes de la cantidad, una cantidad
+// mal leída y ruido después del importe ("3,75 —-", "1,69 _", "3,9511").
+const consumRow = new RegExp(String.raw`^[^\p{L}]{0,8}?(?:\p{L}{1,2}\s+)?(?:(\d{1,3})|${misreadOne})[\s.,:;'"]+(\p{L}.*?)(?:\s[.,]?(\d{1,4},\d{2}))?\s[^\p{L}\d]*(\d{1,4},\d{2})\d{0,2}(?![,\d])(?!.*\p{L}{3})(?!.*\d,\d).{0,12}$`, 'u')
+
+export function parseConsumRow(line: string): ParsedReceiptLine | null {
+  const row = normalizeOcrPrices(line.replace(/\s+/g, ' ').trim())
+  const match = row.match(consumRow)
+  if (!match) return null
+  const rawName = cleanItemName(match[2])
+  if (rawName.length < 2 || !/\p{L}{2}/u.test(rawName)) return null
+  const packages = match[1] ? Number(match[1]) : 1
+  // "401,00": el OCR pega ruido delante del importe. Una línea de súper no llega a
+  // 100 €, así que se quedan las dos últimas cifras de la parte entera ("1,00").
+  const [integer, decimals] = match[4].split(',')
+  const price = Number(integer) >= 100 ? `${Number(integer.slice(-2))},${decimals}` : match[4]
+  return { rawName, packages: packages > 0 && packages < 100 ? packages : 1, totalPrice: parseSpanishNumber(price) }
 }
 
 export function parseConsumReceipt(text: string): ParsedStoreReceipt {
   const rows = toRows(text)
-  const start = rows.findIndex((line) => /cant\.? art[ií]culo/i.test(line))
-  const end = rows.findIndex((line, index) => index > start && /^(total factura|importe a abonar|total)\b/i.test(line))
-  const body = rows.slice(start + 1, end === -1 ? undefined : end)
-  const lines = body.map(parseQuantityFirstItem).filter((line): line is ParsedReceiptLine => line !== null)
+  const isTotal = (line: string) => /^.{0,6}?\b(total factura|importe a abonar)\b/i.test(line)
+  const start = rows.findIndex((line) => /cant\.?\s*art[ií]culo|art[ií]culo.*euros/i.test(line))
+  const endIndex = rows.findIndex((line, index) => index > start && (isTotal(line) || /socio-?cliente/i.test(line)))
+  const end = endIndex === -1 ? rows.length : endIndex
+  const body = rows.slice(start + 1, end)
 
-  const totalRow = rows.find((line) => /^(total factura|importe a abonar)\b/i.test(line))
+  const lines: ParsedReceiptLine[] = []
+  let discount = 0
+  for (const row of body) {
+    if (/descuento|\bdto\b/i.test(row)) {
+      const amount = lastPrice(row)
+      if (amount) discount = round2(discount + Math.abs(parseSpanishNumber(amount[1]) ?? 0))
+      continue
+    }
+    const line = parseConsumRow(row)
+    if (line) lines.push(line)
+  }
+
+  const totalRow = rows.find((line) => /^.{0,6}?\btotal factura\b/i.test(line)) ?? rows.find(isTotal)
   const total = totalRow ? lastPrice(totalRow) : null
-  return { store: 'Consum', date: extractReceiptDate(text), total: total ? parseSpanishNumber(total[1]) : null, lines }
+  return { store: 'Consum', date: extractReceiptDate(text), total: total ? parseSpanishNumber(total[1]) : null, discount: discount || undefined, lines }
 }
 
 // Aldi: el nombre y el importe van en la misma línea ("SURIMI 1,79 € 3", con el

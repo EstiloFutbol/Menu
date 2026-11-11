@@ -1,9 +1,8 @@
 import { Camera, CheckCircle2, FilePlus2, FileText, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
-import { mergeReceiptReadings } from '../lib/receipt-merge'
-import { parseStoreReceipt, type ParsedStoreReceipt } from '../lib/store-receipts'
+import { normalizeReceiptName, parseDecimalInput, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
+import { readReceiptTexts } from '../lib/receipt-read'
 import { numberToInputValue } from '../lib/numbers'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { convertCompatibleQuantity } from '../lib/domain'
@@ -50,6 +49,8 @@ export default function ReceiptImportSection() {
   const [storeName, setStoreName] = useState('')
   const [purchasedAt, setPurchasedAt] = useState(localDatetimeValue())
   const [totalAmount, setTotalAmount] = useState('')
+  // Descuentos del ticket que no van ligados a un producto (p. ej. "Descuento mensual" de Consum).
+  const [ticketDiscount, setTicketDiscount] = useState(0)
   const [reading, setReading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [progress, setProgress] = useState('')
@@ -181,24 +182,12 @@ export default function ReceiptImportSection() {
   function applyReceiptText(texts: string[]) {
     setReadTexts(texts)
     setCopied(false)
-    const storeReadings = texts.map(parseStoreReceipt).filter((receipt): receipt is ParsedStoreReceipt => receipt !== null)
-    if (storeReadings.length) {
-      const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
-      const date = storeReadings.find((receipt) => receipt.date)?.date ?? null
-      setLines(buildReviewLines(mergeReceiptReadings(storeReadings.map((receipt) => receipt.lines), total)))
-      setStoreName(storeReadings[0].store)
-      if (total != null) setTotalAmount(String(total))
-      if (date) setPurchasedAt(localDatetimeValue(date))
-      return
-    }
-
-    const total = texts.map(extractReceiptTotal).find((value) => value != null) ?? null
-    const receiptDate = texts.map(extractReceiptDate).find(Boolean)
-    const store = texts.map(guessStoreName).find(Boolean)
-    setLines(buildReviewLines(mergeReceiptReadings(texts.map(parseReceiptText), total)))
-    if (total != null) setTotalAmount(String(total))
-    if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
-    if (store) setStoreName(store)
+    const reading = readReceiptTexts(texts)
+    setLines(buildReviewLines(reading.lines))
+    if (reading.store) setStoreName(reading.store)
+    setTicketDiscount(reading.discount)
+    if (reading.total != null) setTotalAmount(String(reading.total))
+    if (reading.date) setPurchasedAt(localDatetimeValue(reading.date))
   }
 
   // Ticket digital en PDF (por ejemplo, el que Mercadona envía por correo). El
@@ -267,6 +256,7 @@ export default function ReceiptImportSection() {
     setStoreName('')
     setPurchasedAt(localDatetimeValue())
     setTotalAmount('')
+    setTicketDiscount(0)
     setError('')
     setSuccess('')
     setProgress('')
@@ -280,6 +270,7 @@ export default function ReceiptImportSection() {
     setStoreName('')
     setPurchasedAt(localDatetimeValue())
     setTotalAmount('')
+    setTicketDiscount(0)
     setError('')
     setSuccess('')
     setProgress('')
@@ -298,7 +289,7 @@ export default function ReceiptImportSection() {
   }
 
   const selectedLines = lines.filter((line) => line.include)
-  const detectedTotal = selectedLines.reduce((sum, line) => sum + (parseDecimalInput(line.totalPrice) ?? 0), 0)
+  const detectedTotal = selectedLines.reduce((sum, line) => sum + (parseDecimalInput(line.totalPrice) ?? 0), 0) - ticketDiscount
   // Diferencia entre el total del ticket y la suma de las líneas (positiva si faltan líneas).
   const parsedTotal = totalAmount.trim() ? parseDecimalInput(totalAmount) : null
   const totalMismatch = parsedTotal != null && Math.abs(parsedTotal - detectedTotal) >= 0.01 ? Math.round((parsedTotal - detectedTotal) * 100) / 100 : null
@@ -414,7 +405,7 @@ export default function ReceiptImportSection() {
       <label className="text-sm font-medium text-neutral-700">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
       <label className="text-sm font-medium text-neutral-700">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}</span><span>El total del ticket siempre se puede corregir manualmente.</span>{totalMismatch != null && <span className="w-full font-medium text-amber-700">La suma de las líneas no coincide con el total del ticket ({totalMismatch > 0 ? 'faltan' : 'sobran'} {Math.abs(totalMismatch).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}). Revisa si falta algún producto o hay un precio mal leído.</span>}</div>
+      <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}{ticketDiscount > 0 && ` (ya descontados ${ticketDiscount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} de descuentos del ticket)`}</span><span>El total del ticket siempre se puede corregir manualmente.</span>{totalMismatch != null && <span className="w-full font-medium text-amber-700">La suma de las líneas no coincide con el total del ticket ({totalMismatch > 0 ? 'faltan' : 'sobran'} {Math.abs(totalMismatch).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}). Revisa si falta algún producto o hay un precio mal leído.</span>}</div>
     </section>
 
     {readTexts.length > 0 && <details className="rounded-3xl border border-neutral-200 bg-white px-5 py-4 text-sm shadow-sm">

@@ -228,6 +228,14 @@ Los tests (38 casos) cubren la lógica que no depende de la interfaz:
 
 Los tests de tickets usan textos OCR reales guardados en `src/lib/__fixtures__/`. Cuando un ticket nuevo se lee mal, conviene añadir su texto como fixture y un test que lo cubra.
 
+### Banco de pruebas del OCR
+
+`npm run bench:ocr` pasa fotos reales de tickets por el mismo preprocesado y el mismo Tesseract que la app y las compara con lo que de verdad dice cada ticket. Así se mide si un cambio mejora la lectura antes de llevarlo a la app.
+
+- Las fotos van en `tickets-privados/` (ignorada por git: son datos personales y nunca se suben).
+- Por cada foto `<nombre>.jpg` puede haber un `<nombre>.verdad.json` con la tienda, el total y las líneas reales: `{ "tienda": "Mercadona", "total": 23.45, "lineas": [{ "nombre": "LECHE SEMI", "precio": 0.89 }] }`.
+- El resultado muestra, línea a línea, qué se leyó bien y un resumen: líneas reconocidas, precios correctos, líneas que sobran y si cuadra el total. Los textos del OCR quedan en `tickets-privados/salida/`.
+
 Las funciones SQL no tienen tests automáticos. Se prueban en un Postgres local antes de cada migración.
 
 ## Build
