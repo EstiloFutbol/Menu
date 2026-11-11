@@ -6,6 +6,8 @@ export type ReceiptReading = {
   store: string | null
   date: Date | null
   total: number | null
+  // Descuentos del ticket no ligados a un producto: la suma de líneas menos esto da el total.
+  discount: number
   lines: ParsedReceiptLine[]
 }
 
@@ -18,11 +20,13 @@ export function readReceiptTexts(texts: string[]): ReceiptReading {
   if (storeReadings.length) {
     const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
     const date = storeReadings.find((receipt) => receipt.date)?.date ?? null
+    const discount = storeReadings.find((receipt) => receipt.discount)?.discount ?? 0
     return {
       store: storeReadings[0].store,
       date,
       total,
-      lines: mergeReceiptReadings(storeReadings.map((receipt) => receipt.lines), total),
+      discount,
+      lines: mergeReceiptReadings(storeReadings.map((receipt) => receipt.lines), total == null ? null : Math.round((total + discount) * 100) / 100),
     }
   }
 
@@ -31,6 +35,7 @@ export function readReceiptTexts(texts: string[]): ReceiptReading {
     store: texts.map(guessStoreName).find(Boolean) ?? null,
     date: texts.map(extractReceiptDate).find(Boolean) ?? null,
     total,
+    discount: 0,
     lines: mergeReceiptReadings(texts.map(parseReceiptText), total),
   }
 }

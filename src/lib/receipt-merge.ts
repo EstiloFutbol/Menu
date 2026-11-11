@@ -41,6 +41,8 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
 
   for (const other of others) {
     const used = new Set<number>()
+    // Posición en `merged` de cada línea de esta lectura que casa con la base.
+    const placed = new Map<number, number>()
     base.forEach((line, index) => {
       let best = -1
       let bestScore = 0.55
@@ -52,6 +54,7 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
       })
       if (best === -1) return
       used.add(best)
+      placed.set(best, index)
       const match = other[best]
       if (match.totalPrice != null && !candidates[index].some((price) => cents(price) === cents(match.totalPrice!))) {
         candidates[index].push(match.totalPrice)
@@ -59,6 +62,22 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
       if (merged[index].weightKg == null && match.weightKg != null) merged[index].weightKg = match.weightKg
       if (merged[index].packages == null && match.packages != null) merged[index].packages = match.packages
     })
+
+    // Productos que esta lectura sí ha visto y la base no: se insertan detrás del
+    // último producto anterior que ambas comparten, para conservar el orden.
+    const missing = other
+      .map((line, index) => ({ line, index }))
+      .filter(({ line, index }) => !used.has(index) && line.totalPrice != null &&
+        merged.every((existing) => nameSimilarity(existing.rawName, line.rawName) < 0.45))
+    for (const { line, index } of missing.reverse()) {
+      let anchor = -1
+      for (let previous = index - 1; previous >= 0; previous -= 1) {
+        if (placed.has(previous)) { anchor = placed.get(previous)!; break }
+      }
+      merged.splice(anchor + 1, 0, { ...line })
+      candidates.splice(anchor + 1, 0, [line.totalPrice!])
+      placed.forEach((position, key) => { if (position > anchor) placed.set(key, position + 1) })
+    }
   }
 
   merged.forEach((line, index) => {

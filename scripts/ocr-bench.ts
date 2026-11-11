@@ -110,7 +110,7 @@ for (const photo of photos) {
     console.log(`   ${nameOk ? (priceOk ? '✔' : '≈') : '✖'} ${expected.nombre.padEnd(30)} ${euros(expected.precio).padStart(7)}   leído: ${found ? `${found.rawName} ${euros(found.totalPrice)}` : '—'}`)
   }
   free.forEach((line) => console.log(`   + sobra: ${line.rawName} ${euros(line.totalPrice)}`))
-  const sum = reading.lines.reduce((acc, line) => acc + (line.totalPrice ?? 0), 0)
+  const sum = reading.lines.reduce((acc, line) => acc + (line.totalPrice ?? 0), 0) - reading.discount
   results.push({
     photo,
     truthLines: truth.lineas.length,

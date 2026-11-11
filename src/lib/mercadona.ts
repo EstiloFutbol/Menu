@@ -4,6 +4,8 @@ export type ParsedStoreReceipt = {
   store: string
   date: Date | null
   total: number | null
+  // Descuentos del ticket que no van ligados a un producto (p. ej. "Descuento mensual" de Consum).
+  discount?: number
   lines: ParsedReceiptLine[]
 }
 

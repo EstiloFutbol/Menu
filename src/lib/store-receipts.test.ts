@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import aldiAdaptive from './__fixtures__/aldi-ocr-adaptativo.txt?raw'
 import aldiContrast from './__fixtures__/aldi-ocr-contraste.txt?raw'
 import consum from './__fixtures__/consum-ocr.txt?raw'
+import consumNoisy from './__fixtures__/consum-foto-ruido.txt?raw'
 import { mergeReceiptReadings, nameSimilarity } from './receipt-merge'
 import { extractReceiptDate } from './receipt'
-import { parseAldiReceipt, parseConsumReceipt, parseStoreReceipt } from './store-receipts'
+import { isConsumReceipt, parseAldiReceipt, parseConsumReceipt, parseConsumRow, parseStoreReceipt } from './store-receipts'
 
 // Los fixtures son el texto real que el OCR sacó de fotos de tickets, con sus fallos.
 
@@ -69,5 +70,56 @@ describe('fecha del ticket', () => {
     expect(extractReceiptDate('C:4385 04.10.2026 19:55')).toEqual(new Date(2026, 9, 4, 19, 55))
     expect(extractReceiptDate('VALENCIA - 24/09/26 19:52')).toEqual(new Date(2026, 8, 24, 19, 52))
     expect(extractReceiptDate('PAN 1.29 3')).toBeNull()
+  })
+})
+
+describe('líneas de Consum con ruido del OCR (fotos reales)', () => {
+  it('acepta la cantidad mal leída, ruido delante y detrás del importe', () => {
+    expect(parseConsumRow('$ CEBOLLA SECA TUBO          1,99')).toEqual({ rawName: 'CEBOLLA SECA TUBO', packages: 1, totalPrice: 1.99 })
+    expect(parseConsumRow('| FIL,PECHUGA CERTIFI        4,70')?.totalPrice).toBe(4.7)
+    expect(parseConsumRow('> 1 MAXIBÓN NATAX4 NEST- > 4,50')?.rawName).toBe('MAXIBÓN NATAX4 NEST')
+    expect(parseConsumRow('5          1 bebida fria » 0,15')?.rawName).toBe('bebida fria')
+    expect(parseConsumRow('L               1 CACAHUETE MIEL CONS        1,65')?.totalPrice).toBe(1.65)
+    expect(parseConsumRow('1 Q.CAMEMBERT250G RUS - -   3,99   Po')?.totalPrice).toBe(3.99)
+  })
+
+  it('separa el precio unitario y corrige importes imposibles', () => {
+    expect(parseConsumRow('2 NACHOS MEXICAN CON. 0,95   1,90...')).toEqual({ rawName: 'NACHOS MEXICAN CON', packages: 2, totalPrice: 1.9 })
+    expect(parseConsumRow('1 TOALL FRES-LÍM C.KI 401,00 >  |')?.totalPrice).toBe(1)
+    expect(parseConsumRow('1 V.BLANCO EL COTO >”   4,4511 445')?.totalPrice).toBe(4.45)
+  })
+
+  it('no confunde los datos del pago o del cliente con productos', () => {
+    expect(parseConsumRow('DNI Socio-Cliente 46075****')).toBeNull()
+    expect(parseConsumRow('IMPORTE A ABONAR 24,42')).toBeNull()
+  })
+
+  it('lee un ticket entero con ruido y aparta el descuento del ticket', () => {
+    const receipt = parseConsumReceipt(consumNoisy)
+    expect(receipt.lines).toHaveLength(15)
+    expect(receipt.total).toBe(50.41)
+    expect(receipt.discount).toBe(5.63)
+    const sum = receipt.lines.reduce((acc, line) => acc + (line.totalPrice ?? 0), 0)
+    expect(Math.round((sum - receipt.discount!) * 100) / 100).toBe(50.41)
+  })
+
+  it('reconoce Charter, la franquicia de Consum', () => {
+    expect(isConsumReceipt('Supermercados charter\nLa franquicia de Consum')).toBe(true)
+  })
+})
+
+describe('combinación de lecturas', () => {
+  it('añade los productos que solo ha leído una de las versiones de la foto', () => {
+    const first = [
+      { rawName: 'QUESO CABRA RULO', totalPrice: 3.75, packages: 1 },
+      { rawName: 'PAN BAGUETTE', totalPrice: 0.45, packages: 1 },
+    ]
+    const second = [
+      { rawName: 'QUESO CABRA RULO', totalPrice: 3.75, packages: 1 },
+      { rawName: 'BURRATA DOP 125 GR', totalPrice: 2.9, packages: 1 },
+      { rawName: 'PAN BAGUETTE', totalPrice: 0.45, packages: 1 },
+    ]
+    const merged = mergeReceiptReadings([first, second], 7.1)
+    expect(merged.map((line) => line.rawName)).toEqual(['QUESO CABRA RULO', 'BURRATA DOP 125 GR', 'PAN BAGUETTE'])
   })
 })
