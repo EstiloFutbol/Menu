@@ -8,3 +8,6 @@ public/ocr/
 
 # Claude Code (configuración local)
 .claude/
+
+# Tickets reales para el banco de pruebas del OCR (datos personales: nunca al repo)
+tickets-privados/

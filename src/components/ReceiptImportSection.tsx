@@ -1,9 +1,8 @@
 import { Camera, CheckCircle2, FilePlus2, FileText, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
-import { extractReceiptDate, extractReceiptTotal, guessStoreName, normalizeReceiptName, parseDecimalInput, parseReceiptText, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
-import { mergeReceiptReadings } from '../lib/receipt-merge'
-import { parseStoreReceipt, type ParsedStoreReceipt } from '../lib/store-receipts'
+import { normalizeReceiptName, parseDecimalInput, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
+import { readReceiptTexts } from '../lib/receipt-read'
 import { numberToInputValue } from '../lib/numbers'
 import { buildReceiptImageVariants } from '../lib/receipt-image'
 import { convertCompatibleQuantity } from '../lib/domain'
@@ -181,24 +180,11 @@ export default function ReceiptImportSection() {
   function applyReceiptText(texts: string[]) {
     setReadTexts(texts)
     setCopied(false)
-    const storeReadings = texts.map(parseStoreReceipt).filter((receipt): receipt is ParsedStoreReceipt => receipt !== null)
-    if (storeReadings.length) {
-      const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
-      const date = storeReadings.find((receipt) => receipt.date)?.date ?? null
-      setLines(buildReviewLines(mergeReceiptReadings(storeReadings.map((receipt) => receipt.lines), total)))
-      setStoreName(storeReadings[0].store)
-      if (total != null) setTotalAmount(String(total))
-      if (date) setPurchasedAt(localDatetimeValue(date))
-      return
-    }
-
-    const total = texts.map(extractReceiptTotal).find((value) => value != null) ?? null
-    const receiptDate = texts.map(extractReceiptDate).find(Boolean)
-    const store = texts.map(guessStoreName).find(Boolean)
-    setLines(buildReviewLines(mergeReceiptReadings(texts.map(parseReceiptText), total)))
-    if (total != null) setTotalAmount(String(total))
-    if (receiptDate) setPurchasedAt(localDatetimeValue(receiptDate))
-    if (store) setStoreName(store)
+    const reading = readReceiptTexts(texts)
+    setLines(buildReviewLines(reading.lines))
+    if (reading.store) setStoreName(reading.store)
+    if (reading.total != null) setTotalAmount(String(reading.total))
+    if (reading.date) setPurchasedAt(localDatetimeValue(reading.date))
   }
 
   // Ticket digital en PDF (por ejemplo, el que Mercadona envía por correo). El
