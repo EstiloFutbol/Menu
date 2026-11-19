@@ -2,6 +2,7 @@ import { defineConfig, loadEnv, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
+import pkg from './package.json'
 
 // Política de seguridad de contenido (CSP) para la versión publicada: la página
 // solo puede cargar código propio y conectarse a sí misma y a Supabase. Si alguien
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => {
 
   return {
     base: '/Menu/',
+    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
     plugins: [
       react(),
       tailwindcss(),
