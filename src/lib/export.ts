@@ -6,7 +6,7 @@ export const EXPORT_TABLES = [
   'pantry_items', 'shopping_lists', 'shopping_items',
   'purchases', 'purchase_items',
   'consumption_logs', 'consumption_ingredients',
-  'receipt_aliases',
+  'receipt_aliases', 'user_settings',
 ] as const
 
 export type ExportRow = Record<string, unknown>

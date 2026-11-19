@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { addDays, aggregateNeeds, areUnitsCompatible, compareNeedWithPantry, convertCompatibleQuantity, formatQuantity, formatWeekRange, fromBaseQuantity, localDateString, pendingPlannedLines, startOfWeek, toBaseQuantity, type PlanEntryForNeeds } from '../lib/domain'
 import { parseDecimalInput } from '../lib/receipt'
 import { friendlyError } from '../lib/errors'
+import { useSettings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 
@@ -51,7 +52,9 @@ const categoryOrder = [
 ]
 
 function ShoppingSection() {
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()))
+  const { weekStartsOn } = useSettings().settings
+  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), weekStartsOn))
+  useEffect(() => { setWeekStart((current) => startOfWeek(addDays(current, 3), weekStartsOn)) }, [weekStartsOn])
   const [listId, setListId] = useState<string | null>(null)
   const [items, setItems] = useState<ShoppingItem[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
@@ -421,7 +424,7 @@ function ShoppingSection() {
         </div>
         <div className="flex flex-wrap gap-2">
           <button onClick={() => setWeekStart((current) => addDays(current, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600"><ChevronLeft size={18} /></button>
-          <button onClick={() => setWeekStart(startOfWeek(new Date()))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700">Esta semana</button>
+          <button onClick={() => setWeekStart(startOfWeek(new Date(), weekStartsOn))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700">Esta semana</button>
           <button onClick={() => setWeekStart((current) => addDays(current, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600"><ChevronRight size={18} /></button>
         </div>
       </div>

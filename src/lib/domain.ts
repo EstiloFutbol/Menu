@@ -19,11 +19,25 @@ export function shouldShowPantryItem(item: PantryVisibilityItem) {
   return item.status !== 'no_tengo'
 }
 
-export function startOfWeek(date: Date) {
+export type WeekStart = 0 | 1
+
+// weekStartsOn: 1 = lunes (por defecto), 0 = domingo.
+export function startOfWeek(date: Date, weekStartsOn: WeekStart = 1) {
   const result = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const weekday = result.getDay()
-  result.setDate(result.getDate() + (weekday === 0 ? -6 : 1 - weekday))
+  result.setDate(result.getDate() - weekdayIndex(result, weekStartsOn))
   return result
+}
+
+// Posición (0-6) del día dentro de su semana según el día en que empieza.
+export function weekdayIndex(date: Date, weekStartsOn: WeekStart = 1) {
+  return (date.getDay() - weekStartsOn + 7) % 7
+}
+
+const WEEKDAY_NAMES = ['Domingo', 'Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado']
+
+// Nombres de los 7 días en el orden de la semana elegida.
+export function weekdayNames(weekStartsOn: WeekStart = 1) {
+  return Array.from({ length: 7 }, (_, index) => WEEKDAY_NAMES[(index + weekStartsOn) % 7])
 }
 
 export function addDays(date: Date, days: number) {
