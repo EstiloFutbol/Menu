@@ -10,6 +10,8 @@ type ErrorOverrides = {
 
 // Mensajes que lanzan nuestras funciones SQL, traducidos.
 const knownMessages: Record<string, string> = {
+  'New password should be different from the old password.': 'La contraseña nueva debe ser distinta de la actual.',
+  'Auth session missing!': 'Tu sesión ha caducado. Vuelve a iniciar sesión.',
   'Authentication required': 'Tu sesión ha caducado. Vuelve a iniciar sesión.',
   'Ingredient not found': 'No se ha encontrado el producto.',
   'Ingredient does not belong to current user': 'No se ha encontrado el producto.',

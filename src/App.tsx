@@ -1,17 +1,19 @@
-import { CalendarDays, ChefHat, PackageOpen, ShoppingBasket } from 'lucide-react'
+import { CalendarDays, ChefHat, PackageOpen, Settings, ShoppingBasket } from 'lucide-react'
 import { useState } from 'react'
 import MenuSection from './components/MenuSection'
 import PantrySection from './components/PantrySection'
 import PurchaseAreaSection from './components/PurchaseAreaSection'
 import RecipesSection from './components/RecipesSection'
+import SettingsSection from './components/SettingsSection'
 
-type Section = 'menu' | 'recetas' | 'compra' | 'despensa'
+type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes' | 'ajustes'
 
 const sections: Array<{ id: Section; label: string; icon: typeof CalendarDays }> = [
   { id: 'menu', label: 'Menú', icon: CalendarDays },
   { id: 'recetas', label: 'Recetas', icon: ChefHat },
   { id: 'compra', label: 'Compra', icon: ShoppingBasket },
   { id: 'despensa', label: 'Despensa', icon: PackageOpen },
+  { id: 'ajustes', label: 'Ajustes', icon: Settings },
 ]
 
 function App() {
@@ -37,11 +39,12 @@ function App() {
           {section === 'recetas' && <RecipesSection />}
           {section === 'compra' && <PurchaseAreaSection />}
           {section === 'despensa' && <PantrySection />}
+          {section === 'ajustes' && <SettingsSection />}
         </main>
       </div>
       <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-4 gap-1">
-          {sections.map(({ id, label, icon: Icon }) => { const active = section === id; return <button key={id} onClick={() => setSection(id)} className={`flex flex-col items-center gap-1 rounded-2xl px-2 py-2 text-[11px] font-medium ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+          {sections.map(({ id, label, icon: Icon }) => { const active = section === id; return <button key={id} onClick={() => setSection(id)} className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
         </div>
       </nav>
     </div>
