@@ -6,7 +6,7 @@ import PurchaseAreaSection from './components/PurchaseAreaSection'
 import RecipesSection from './components/RecipesSection'
 import SettingsSection from './components/SettingsSection'
 
-type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes' | 'ajustes'
+type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes'
 
 const sections: Array<{ id: Section; label: string; icon: typeof CalendarDays }> = [
   { id: 'menu', label: 'Menú', icon: CalendarDays },
