@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, formatBaseQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek } from './domain'
+import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, formatBaseQuantity, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek, weekdayIndex, weekdayNames } from './domain'
 
 describe('convertCompatibleQuantity', () => {
   it('converts mass and volume units', () => {
@@ -35,6 +35,27 @@ describe('week helpers', () => {
 
     const sunday = startOfWeek(new Date(2026, 8, 6))
     expect(localDateString(sunday)).toBe('2026-08-31')
+  })
+
+  it('starts weeks on Sunday when asked', () => {
+    expect(localDateString(startOfWeek(new Date(2026, 8, 6), 0))).toBe('2026-09-06') // domingo
+    expect(localDateString(startOfWeek(new Date(2026, 8, 7), 0))).toBe('2026-09-06') // lunes
+    expect(localDateString(startOfWeek(new Date(2026, 8, 12), 0))).toBe('2026-09-06') // sábado
+  })
+
+  it('gives the position of a day within its week', () => {
+    const sunday = new Date(2026, 8, 6)
+    const monday = new Date(2026, 8, 7)
+    const saturday = new Date(2026, 8, 12)
+    expect([sunday, monday, saturday].map((d) => weekdayIndex(d))).toEqual([6, 0, 5])
+    expect([sunday, monday, saturday].map((d) => weekdayIndex(d, 0))).toEqual([0, 1, 6])
+  })
+
+  it('orders weekday names by week start', () => {
+    expect(weekdayNames()[0]).toBe('Lunes')
+    expect(weekdayNames()[6]).toBe('Domingo')
+    expect(weekdayNames(0)[0]).toBe('Domingo')
+    expect(weekdayNames(0)[6]).toBe('Sábado')
   })
 
   it('adds calendar days without mutating the input', () => {

@@ -1,5 +1,8 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { friendlyError } from '../lib/errors'
+import { MEAL_IDS, saveSettings, useSettings, type MealId } from '../lib/settings'
+import type { WeekStart } from '../lib/domain'
+import { NumberInput } from './NumberInput'
 import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, type ExportTables } from '../lib/export'
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
@@ -13,7 +16,7 @@ const TABLE_LABELS: Record<string, string> = {
   menu_entries: 'menú', menu_entry_recipes: 'recetas del menú', menu_entry_products: 'productos del menú',
   pantry_items: 'despensa', shopping_lists: 'listas de la compra', shopping_items: 'artículos de la compra',
   purchases: 'compras', purchase_items: 'artículos comprados', consumption_logs: 'consumos', consumption_ingredients: 'ingredientes consumidos',
-  receipt_aliases: 'alias de tickets',
+  receipt_aliases: 'alias de tickets', user_settings: 'preferencias',
 }
 
 const card = 'rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm'
@@ -65,7 +68,7 @@ function AccountTab() {
         setExportProgress(`Exportando ${TABLE_LABELS[name] ?? name}…`)
         const rows: ExportRow[] = []
         for (let from = 0; ; from += PAGE_SIZE) {
-          const { data, error } = await supabase.from(name).select('*').order('id').range(from, from + PAGE_SIZE - 1)
+          const { data, error } = await supabase.from(name).select('*').order(name === 'user_settings' ? 'user_id' : 'id').range(from, from + PAGE_SIZE - 1)
           if (error) throw error
           rows.push(...((data ?? []) as ExportRow[]))
           if (!data || data.length < PAGE_SIZE) break
@@ -184,6 +187,72 @@ function AccountTab() {
   )
 }
 
+const MEAL_LABELS: Record<MealId, string> = { desayuno: 'Desayuno', almuerzo: 'Almuerzo', comida: 'Comida', merienda: 'Merienda', cena: 'Cena' }
+
+function PreferencesTab() {
+  const { settings, loadError } = useSettings()
+  const [servings, setServings] = useState(String(settings.defaultServings))
+  const [weekStartsOn, setWeekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
+  const [meals, setMeals] = useState<MealId[]>(settings.visibleMeals)
+  const [saving, setSaving] = useState(false)
+  const [notice, setNotice] = useState<Notice>(null)
+
+  // Cuando llegan las preferencias guardadas se reflejan en el formulario.
+  useEffect(() => {
+    setServings(String(settings.defaultServings))
+    setWeekStartsOn(settings.weekStartsOn)
+    setMeals(settings.visibleMeals)
+  }, [settings])
+
+  const toggleMeal = (id: MealId) => setMeals((current) => {
+    if (current.includes(id)) return current.length > 1 ? current.filter((item) => item !== id) : current
+    return MEAL_IDS.filter((item) => item === id || current.includes(item))
+  })
+
+  async function save(event: FormEvent) {
+    event.preventDefault()
+    const value = Number(servings)
+    if (!Number.isInteger(value) || value < 1 || value > 20) { setNotice({ kind: 'error', text: 'Las raciones deben ser un número entero de 1 a 20.' }); return }
+    if (!meals.length) { setNotice({ kind: 'error', text: 'Deja al menos una franja marcada.' }); return }
+    setSaving(true)
+    setNotice(null)
+    try {
+      await saveSettings({ defaultServings: value, weekStartsOn, visibleMeals: meals })
+      setNotice({ kind: 'ok', text: 'Preferencias guardadas.' })
+    } catch (error) {
+      setNotice({ kind: 'error', text: friendlyError(error, 'No se han podido guardar las preferencias.') })
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <section className={card}>
+      <h2 className="text-base font-semibold">Planificación</h2>
+      {loadError && <p role="alert" className="mt-2 text-sm text-red-600">{loadError}</p>}
+      <form onSubmit={save} className="mt-3 space-y-4">
+        <label className="block text-sm text-neutral-600">Raciones por defecto
+          <NumberInput kind="packages" value={servings} onValueChange={setServings} className={`${inputClass} mt-1`} />
+        </label>
+        <fieldset>
+          <legend className="text-sm text-neutral-600">La semana empieza en</legend>
+          <div className="mt-1 flex gap-4 text-sm">
+            <label className="flex items-center gap-2"><input type="radio" name="week-start" checked={weekStartsOn === 1} onChange={() => setWeekStartsOn(1)} /> Lunes</label>
+            <label className="flex items-center gap-2"><input type="radio" name="week-start" checked={weekStartsOn === 0} onChange={() => setWeekStartsOn(0)} /> Domingo</label>
+          </div>
+        </fieldset>
+        <fieldset>
+          <legend className="text-sm text-neutral-600">Franjas que se muestran en el menú</legend>
+          <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+            {MEAL_IDS.map((id) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={meals.includes(id)} onChange={() => toggleMeal(id)} /> {MEAL_LABELS[id]}</label>)}
+          </div>
+          <p className="mt-1 text-xs text-neutral-400">Al menos una. Lo ya planificado en franjas ocultas no se borra.</p>
+        </fieldset>
+        <button type="submit" disabled={saving} className="rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar preferencias'}</button>
+      </form>
+      <NoticeText notice={notice} />
+    </section>
+  )
+}
+
 function SettingsSection() {
   const [tab, setTab] = useState<Tab>('cuenta')
   const tabs: Array<{ id: Tab; label: string }> = [{ id: 'cuenta', label: 'Cuenta' }, { id: 'preferencias', label: 'Preferencias' }]
@@ -197,7 +266,7 @@ function SettingsSection() {
         ))}
       </div>
       <div className="mt-4">
-        {tab === 'cuenta' ? <AccountTab /> : <section className={card}><p className="text-sm text-neutral-500">Próximamente</p></section>}
+        {tab === 'cuenta' ? <AccountTab /> : <PreferencesTab />}
       </div>
     </div>
   )

@@ -186,6 +186,8 @@ La migración `20261012000400_numeric_precision.sql` ajusta la precisión de las
 
 La migración `20261012000500_security_hardening.sql` refuerza el aislamiento entre usuarios. Las políticas exigen que cualquier fila referenciada (ingrediente, receta, entrada del menú) pertenezca al mismo usuario. Además, las funciones SQL solo pueden ejecutarlas usuarios con sesión iniciada.
 
+La migración `20261119000100_user_settings.sql` añade `user_settings`, con las preferencias de planificación de cada usuario (raciones por defecto, día de inicio de semana y franjas visibles) protegidas por RLS. Hay que aplicarla en Supabase; sin ella la app usa los valores por defecto.
+
 ## Desarrollo local
 
 ```bash
