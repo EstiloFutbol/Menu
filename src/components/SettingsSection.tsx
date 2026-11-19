@@ -6,6 +6,7 @@ import { NumberInput } from './NumberInput'
 import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, type ExportTables } from '../lib/export'
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
+import ReceiptAliasesCard from './ReceiptAliasesCard'
 
 type Tab = 'cuenta' | 'preferencias'
 type Notice = { kind: 'ok' | 'error'; text: string } | null
@@ -225,6 +226,7 @@ function PreferencesTab() {
   }
 
   return (
+    <div className="space-y-4">
     <section className={card}>
       <h2 className="text-base font-semibold">Planificación</h2>
       {loadError && <p role="alert" className="mt-2 text-sm text-red-600">{loadError}</p>}
@@ -250,6 +252,8 @@ function PreferencesTab() {
       </form>
       <NoticeText notice={notice} />
     </section>
+    <ReceiptAliasesCard />
+    </div>
   )
 }
 
