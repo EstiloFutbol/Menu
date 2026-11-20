@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, FilePlus2, FileText, LoaderCircle, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
+import { Camera, CheckCircle2, ChevronDown, FilePlus2, FileText, LoaderCircle, PackagePlus, Plus, ReceiptText, RotateCcw, Trash2 } from 'lucide-react'
 import { ChangeEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { createWorker } from 'tesseract.js'
 import { normalizeReceiptName, parseDecimalInput, scoreReceiptText, type ParsedReceiptLine } from '../lib/receipt'
@@ -37,6 +37,17 @@ function localDatetimeValue(date = new Date()) {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function useMediaQuery(query: string) {
+  const [matches, setMatches] = useState(() => window.matchMedia(query).matches)
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const update = () => setMatches(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [query])
+  return matches
+}
+
 function lineId(index: number) {
   return `receipt-line-${Date.now()}-${index}`
 }
@@ -60,6 +71,9 @@ export default function ReceiptImportSection() {
   // Texto que ha sacado el OCR o el PDF, para poder revisarlo o enviarlo si la lectura falla.
   const [readTexts, setReadTexts] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
+  // En el móvil cada producto se ve en una fila compacta y se despliega para editarlo.
+  const isWide = useMediaQuery('(min-width: 1024px)')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const loadReferenceData = useCallback(async () => {
     if (!supabase) return
@@ -249,7 +263,9 @@ export default function ReceiptImportSection() {
   }
 
   function addManualLine() {
-    setLines((current) => [...current, blankLine(current.length)])
+    const line = blankLine(lines.length)
+    setLines((current) => [...current, line])
+    setExpandedId(line.id)
   }
 
   function startEmptyTicket() {
@@ -262,7 +278,9 @@ export default function ReceiptImportSection() {
     setProgress('')
     setSourceMode('manual')
     setReadTexts([])
-    setLines([blankLine(0)])
+    const line = blankLine(0)
+    setLines([line])
+    setExpandedId(line.id)
   }
 
   function reset() {
@@ -392,78 +410,138 @@ export default function ReceiptImportSection() {
     </div>
   }
 
-  return <div className="space-y-5">
-    <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><p className="text-sm font-medium text-neutral-500">{sourceMode === 'manual' ? 'Ticket manual' : 'Ticket leído'}</p><h2 className="mt-1 text-2xl font-semibold">{sourceMode === 'manual' ? 'Crear ticket' : 'Revisar antes de importar'}</h2><p className="mt-1 text-sm text-neutral-500">{sourceMode === 'manual' ? 'Añade los productos uno a uno y revisa cantidades, unidades y precios antes de guardar.' : 'Corrige todo lo que necesites. Nada se guarda hasta confirmar.'}</p></div>
-      <button onClick={reset} className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-600"><RotateCcw size={16} /> Otro ticket</button>
+  const money = (value: number) => value.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })
+  const pantryCount = selectedLines.filter((line) => line.addToPantry).length
+  const inputClass = 'w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-2 text-sm font-normal text-neutral-800'
+  const priceClass = (line: ReviewLine) => `${inputClass} text-right ${line.include && !line.totalPrice.trim() ? 'border-amber-300 bg-amber-50' : ''}`
+
+  function updateRawName(line: ReviewLine, value: string) {
+    if (sourceMode === 'manual') {
+      const ingredient = ingredientsByNormalized.get(normalizeReceiptName(value))
+      updateLine(line.id, {
+        rawName: value,
+        translatedName: ingredient?.name ?? value,
+        ingredientId: ingredient?.id ?? '',
+        category: ingredient?.category ?? line.category,
+        unit: ingredient?.default_unit ?? line.unit,
+        matchedByAlias: false,
+      })
+    } else {
+      updateLine(line.id, { rawName: value, matchedByAlias: false })
+    }
+  }
+
+  function removeLine(id: string) {
+    setLines((current) => current.filter((item) => item.id !== id))
+  }
+
+  // Campos que se comparten entre la fila del ordenador y la ficha desplegada del móvil.
+  const fields = (line: ReviewLine) => ({
+    rawName: <input aria-label={sourceMode === 'manual' ? 'Producto' : 'Concepto del ticket'} list={sourceMode === 'manual' ? 'receipt-ingredients' : undefined} value={line.rawName} onChange={(e) => updateRawName(line, e.target.value)} placeholder={sourceMode === 'manual' ? 'Buscar o escribir producto' : undefined} className={inputClass} />,
+    translatedName: <input aria-label={sourceMode === 'manual' ? 'Producto del catálogo' : 'Qué es realmente'} list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className={inputClass} />,
+    quantity: <NumberInput aria-label="Cantidad" kind="quantity" value={line.quantity} onValueChange={(input) => updateLine(line.id, { quantity: input })} className={inputClass} />,
+    unit: <select aria-label="Unidad" value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value as Unit })} className={inputClass}>{units.map((unit) => <option key={unit}>{unit}</option>)}</select>,
+    price: <NumberInput aria-label="Precio de la línea" kind="money" value={line.totalPrice} onValueChange={(input) => updateLine(line.id, { totalPrice: input })} placeholder="—" className={priceClass(line)} />,
+    category: <select aria-label="Categoría del nuevo alimento" value={line.category} onChange={(e) => updateLine(line.id, { category: e.target.value })} className={`${inputClass} border-amber-300 bg-amber-50 py-1.5 text-xs`}>{categories.map((category) => <option key={category}>{category}</option>)}</select>,
+  })
+
+  return <div className="space-y-4 pb-2">
+    <div className="flex items-start justify-between gap-3">
+      <div className="min-w-0"><p className="text-sm font-medium text-neutral-500">{sourceMode === 'manual' ? 'Ticket manual' : 'Ticket leído'}</p><h2 className="mt-0.5 text-xl font-semibold sm:text-2xl">{sourceMode === 'manual' ? 'Crear ticket' : 'Revisar antes de importar'}</h2><p className="mt-1 hidden text-sm text-neutral-500 sm:block">{sourceMode === 'manual' ? 'Añade los productos uno a uno y revisa cantidades, unidades y precios antes de guardar.' : 'Corrige todo lo que necesites. Nada se guarda hasta confirmar.'}</p></div>
+      <button onClick={reset} className="flex shrink-0 items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-600"><RotateCcw size={16} /> Otro ticket</button>
     </div>
 
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {success && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</div>}
 
-    <section className="grid gap-4 rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:grid-cols-3">
-      <label className="text-sm font-medium text-neutral-700">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <label className="text-sm font-medium text-neutral-700">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <label className="text-sm font-medium text-neutral-700">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className="mt-2 w-full rounded-2xl border border-neutral-200 px-4 py-3 font-normal" /></label>
-      <div className="sm:col-span-3 flex flex-wrap gap-x-5 gap-y-1 rounded-2xl bg-neutral-50 px-4 py-3 text-xs text-neutral-500"><span>{selectedLines.length} líneas seleccionadas</span><span>Suma de líneas detectadas: {detectedTotal.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}{ticketDiscount > 0 && ` (ya descontados ${ticketDiscount.toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })} de descuentos del ticket)`}</span><span>El total del ticket siempre se puede corregir manualmente.</span>{totalMismatch != null && <span className="w-full font-medium text-amber-700">La suma de las líneas no coincide con el total del ticket ({totalMismatch > 0 ? 'faltan' : 'sobran'} {Math.abs(totalMismatch).toLocaleString('es-ES', { style: 'currency', currency: 'EUR' })}). Revisa si falta algún producto o hay un precio mal leído.</span>}</div>
+    <section className="grid grid-cols-2 gap-3 rounded-3xl border border-neutral-200 bg-white p-4 shadow-sm lg:grid-cols-[minmax(0,1fr)_220px_160px] lg:items-end">
+      <label className="col-span-2 text-xs font-medium text-neutral-500 lg:col-span-1">Tienda<input value={storeName} onChange={(e) => setStoreName(e.target.value)} className={`mt-1 ${inputClass}`} /></label>
+      <label className="text-xs font-medium text-neutral-500">Fecha y hora<input type="datetime-local" value={purchasedAt} onChange={(e) => setPurchasedAt(e.target.value)} className={`mt-1 ${inputClass}`} /></label>
+      <label className="text-xs font-medium text-neutral-500">Total del ticket<NumberInput kind="money" value={totalAmount} onValueChange={(input) => setTotalAmount(input)} className={`mt-1 ${inputClass}`} /></label>
+      {readTexts.length > 0 && <details className="col-span-2 text-xs lg:col-span-3">
+        <summary className="cursor-pointer font-medium text-neutral-500">Ver texto leído</summary>
+        <div className="mt-2">
+          <p className="text-neutral-500">Es lo que la app ha leído del ticket{readTexts.length > 1 ? ', una vez por cada versión de la imagen' : ''}. Si algo sale mal, cópialo y envíalo para mejorar la lectura.</p>
+          <button type="button" onClick={() => void copyReadText()} className="mt-2 rounded-xl border border-neutral-200 px-3 py-2 font-semibold text-neutral-700">{copied ? 'Copiado' : 'Copiar texto'}</button>
+          <div className="grid gap-2 lg:grid-cols-2">{readTexts.map((text, index) => <pre key={index} className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl bg-neutral-50 p-3 text-neutral-600">{text}</pre>)}</div>
+        </div>
+      </details>}
     </section>
-
-    {readTexts.length > 0 && <details className="rounded-3xl border border-neutral-200 bg-white px-5 py-4 text-sm shadow-sm">
-      <summary className="cursor-pointer font-medium text-neutral-700">Ver texto leído</summary>
-      <p className="mt-2 text-xs text-neutral-500">Es lo que la app ha leído del ticket{readTexts.length > 1 ? `, una vez por cada versión de la imagen` : ''}. Si algo sale mal, cópialo y envíalo para mejorar la lectura.</p>
-      <button type="button" onClick={() => void copyReadText()} className="mt-3 rounded-xl border border-neutral-200 px-3 py-2 text-xs font-semibold text-neutral-700">{copied ? 'Copiado' : 'Copiar texto'}</button>
-      {readTexts.map((reading, index) => <pre key={index} className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap rounded-2xl bg-neutral-50 p-3 text-xs text-neutral-600">{reading}</pre>)}
-    </details>}
 
     <datalist id="receipt-ingredients">{ingredients.map((ingredient) => <option key={ingredient.id} value={ingredient.name} />)}</datalist>
 
-    <div className="space-y-3">
-      {lines.map((line, index) => {
-        const hint = pantryHint(line)
-        return <article key={line.id} className={`rounded-3xl border bg-white p-4 shadow-sm sm:p-5 ${line.include ? 'border-neutral-200' : 'border-neutral-100 opacity-60'}`}>
-          <div className="flex items-start gap-3">
-            <input type="checkbox" checked={line.include} onChange={(e) => updateLine(line.id, { include: e.target.checked })} className="mt-1 h-4 w-4" aria-label="Incluir producto" />
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2"><span className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Línea {index + 1}</span>{line.matchedByAlias && <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">Traducción recordada</span>}</div>
-              <div className="mt-3 grid gap-3 lg:grid-cols-[1fr_1fr_110px_120px_120px]">
-                <label className="text-xs font-medium text-neutral-500">{sourceMode === 'manual' ? 'Producto' : 'Concepto del ticket'}<input list={sourceMode === 'manual' ? 'receipt-ingredients' : undefined} value={line.rawName} onChange={(e) => {
-                  const value = e.target.value
-                  if (sourceMode === 'manual') {
-                    const ingredient = ingredientsByNormalized.get(normalizeReceiptName(value))
-                    updateLine(line.id, {
-                      rawName: value,
-                      translatedName: ingredient?.name ?? value,
-                      ingredientId: ingredient?.id ?? '',
-                      category: ingredient?.category ?? line.category,
-                      unit: ingredient?.default_unit ?? line.unit,
-                      matchedByAlias: false,
-                    })
-                  } else {
-                    updateLine(line.id, { rawName: value, matchedByAlias: false })
-                  }
-                }} placeholder={sourceMode === 'manual' ? 'Buscar o escribir producto' : undefined} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
-                <label className="text-xs font-medium text-neutral-500">{sourceMode === 'manual' ? 'Producto del catálogo' : 'Qué es realmente'}<input list="receipt-ingredients" value={line.translatedName} onChange={(e) => updateTranslatedName(line, e.target.value)} placeholder="Ej. Pechuga de pavo" className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal text-neutral-800" /></label>
-                <label className="text-xs font-medium text-neutral-500">Cantidad<NumberInput kind="quantity" value={line.quantity} onValueChange={(input) => updateLine(line.id, { quantity: input })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
-                <label className="text-xs font-medium text-neutral-500">Unidad<select value={line.unit} onChange={(e) => updateLine(line.id, { unit: e.target.value as Unit })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{units.map((unit) => <option key={unit}>{unit}</option>)}</select></label>
-                <label className="text-xs font-medium text-neutral-500">Precio línea<NumberInput kind="money" value={line.totalPrice} onValueChange={(input) => updateLine(line.id, { totalPrice: input })} className="mt-1.5 w-full rounded-xl border border-neutral-200 px-3 py-2.5 text-sm font-normal" /></label>
+    <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
+      {isWide && <div className="grid grid-cols-[20px_minmax(0,1fr)_minmax(0,1.2fr)_170px_80px_110px_96px_72px] gap-2 border-b border-neutral-100 bg-neutral-50 px-4 py-2 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">
+        <span /><span>{sourceMode === 'manual' ? 'Producto' : 'Concepto del ticket'}</span><span>{sourceMode === 'manual' ? 'Producto del catálogo' : 'Qué es realmente'}</span><span>Categoría</span><span>Cantidad</span><span>Unidad</span><span className="text-right">Precio</span><span />
+      </div>}
+      <div className="divide-y divide-neutral-100">
+        {lines.map((line) => {
+          const hint = pantryHint(line)
+          const incompatible = Boolean(hint?.startsWith('Unidad incompatible'))
+          const field = fields(line)
+          const include = <input type="checkbox" checked={line.include} onChange={(e) => updateLine(line.id, { include: e.target.checked })} className="h-4 w-4 shrink-0" aria-label="Incluir producto" />
+          const badges = <>
+            {!line.ingredientId && <span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">Nuevo</span>}
+            {line.matchedByAlias && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Recordado</span>}
+            {!line.addToPantry && <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500">Sin despensa</span>}
+          </>
+
+          if (isWide) {
+            return <div key={line.id} className={`px-4 py-2 ${line.include ? '' : 'opacity-50'}`}>
+              <div className="grid grid-cols-[20px_minmax(0,1fr)_minmax(0,1.2fr)_170px_80px_110px_96px_72px] items-center gap-2">
+                {include}{field.rawName}{field.translatedName}
+                {/* Si es un alimento nuevo se elige su categoría; si ya existe, solo se informa. */}
+                {line.ingredientId
+                  ? <span className="flex min-w-0 items-center gap-1.5 text-xs text-neutral-400"><span className="truncate">{line.category}</span>{line.matchedByAlias && <span className="rounded-full bg-emerald-50 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700">Recordado</span>}</span>
+                  : <span title={`Se creará el alimento “${line.translatedName || '…'}”`}>{field.category}</span>}
+                {field.quantity}{field.unit}{field.price}
+                <div className="flex justify-end">
+                  <button type="button" onClick={() => updateLine(line.id, { addToPantry: !line.addToPantry })} aria-pressed={line.addToPantry} title={line.addToPantry ? `Añadir a despensa. ${hint ?? ''}` : 'No se añadirá a la despensa'} className={`grid h-8 w-8 place-items-center rounded-lg ${line.addToPantry ? 'bg-emerald-50 text-emerald-700' : 'text-neutral-300 hover:bg-neutral-100'}`}><PackagePlus size={16} /></button>
+                  <button type="button" onClick={() => removeLine(line.id)} title="Quitar línea" aria-label="Quitar línea" className="grid h-8 w-8 place-items-center rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-600"><Trash2 size={16} /></button>
+                </div>
               </div>
-              {!line.ingredientId && <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-xs font-medium text-neutral-500">Categoría del nuevo alimento<select value={line.category} onChange={(e) => updateLine(line.id, { category: e.target.value })} className="mt-1.5 w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm font-normal">{categories.map((category) => <option key={category}>{category}</option>)}</select></label><div className="flex items-end"><p className="rounded-xl bg-amber-50 px-3 py-2.5 text-xs leading-5 text-amber-800">No coincide con un alimento existente. Al importar se creará “{line.translatedName || '…'}”.</p></div></div>}
-              <div className="mt-3 flex flex-wrap items-center justify-between gap-3 border-t border-neutral-100 pt-3">
-                <label className="flex items-center gap-2 text-xs font-medium text-neutral-700"><input type="checkbox" checked={line.addToPantry} onChange={(e) => updateLine(line.id, { addToPantry: e.target.checked })} /> Añadir a despensa</label>
-                {hint && <p className={`text-xs ${hint.startsWith('Unidad incompatible') ? 'text-red-600' : 'text-neutral-400'}`}>{hint}</p>}
-                <button onClick={() => setLines((current) => current.filter((item) => item.id !== line.id))} className="flex items-center gap-1 text-xs font-medium text-red-500"><Trash2 size={14} /> Quitar línea</button>
-              </div>
+              {incompatible && <p className="mt-1 pl-7 text-xs text-red-600">{hint}</p>}
             </div>
+          }
+
+          const open = expandedId === line.id
+          const title = line.translatedName || line.rawName || 'Producto sin nombre'
+          return <div key={line.id} className={line.include ? '' : 'opacity-50'}>
+            <div className="flex items-center gap-3 px-3 py-2.5">
+              {include}
+              <button type="button" onClick={() => setExpandedId(open ? null : line.id)} aria-expanded={open} className="min-w-0 flex-1 text-left">
+                <span className="block truncate text-sm font-medium text-neutral-900">{title}</span>
+                <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-neutral-400"><span className="truncate">{line.rawName && line.rawName !== title ? `${line.rawName} · ` : ''}{line.quantity} {line.unit}</span>{badges}</span>
+              </button>
+              <div className="w-20 shrink-0">{field.price}</div>
+              <button type="button" onClick={() => setExpandedId(open ? null : line.id)} aria-label={open ? 'Cerrar' : 'Editar'} className="grid h-8 w-6 shrink-0 place-items-center text-neutral-400"><ChevronDown size={18} className={`transition ${open ? 'rotate-180' : ''}`} /></button>
+            </div>
+            {open && <div className="grid grid-cols-2 gap-2 bg-neutral-50 px-3 pb-3 pt-2 text-xs font-medium text-neutral-500">
+              <label className="col-span-2">{sourceMode === 'manual' ? 'Producto' : 'Concepto del ticket'}<div className="mt-1">{field.rawName}</div></label>
+              <label className="col-span-2">{sourceMode === 'manual' ? 'Producto del catálogo' : 'Qué es realmente'}<div className="mt-1">{field.translatedName}</div></label>
+              <label>Cantidad<div className="mt-1">{field.quantity}</div></label>
+              <label>Unidad<div className="mt-1">{field.unit}</div></label>
+              {!line.ingredientId && <label className="col-span-2">Se creará como alimento nuevo en la categoría<div className="mt-1">{field.category}</div></label>}
+              <div className="col-span-2 flex items-center justify-between gap-3 pt-1">
+                <label className="flex items-center gap-2 text-neutral-700"><input type="checkbox" checked={line.addToPantry} onChange={(e) => updateLine(line.id, { addToPantry: e.target.checked })} /> Añadir a despensa</label>
+                <button type="button" onClick={() => removeLine(line.id)} className="flex items-center gap-1 text-red-500"><Trash2 size={14} /> Quitar línea</button>
+              </div>
+              {hint && <p className={`col-span-2 font-normal ${incompatible ? 'text-red-600' : 'text-neutral-400'}`}>{hint}</p>}
+            </div>}
           </div>
-        </article>
-      })}
-    </div>
+        })}
+      </div>
+      <button onClick={addManualLine} className="flex w-full items-center gap-2 border-t border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50"><Plus size={17} /> Añadir línea</button>
+    </section>
 
-    <button onClick={addManualLine} className="flex items-center gap-2 rounded-2xl border border-dashed border-neutral-300 bg-white px-4 py-3 text-sm font-medium text-neutral-600"><Plus size={17} /> Añadir línea manual</button>
-
-    <div className="sticky bottom-4 z-10 flex flex-col gap-3 rounded-3xl border border-neutral-200 bg-white/95 p-4 shadow-xl backdrop-blur sm:flex-row sm:items-center sm:justify-between">
-      <div><p className="text-sm font-semibold">{selectedLines.filter((line) => line.addToPantry).length} productos irán a despensa</p><p className="mt-0.5 text-xs text-neutral-500">Las equivalencias corregidas se recordarán para próximos tickets.</p></div>
-      <button disabled={saving || !selectedLines.length} onClick={() => void importReceipt()} className="flex items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white disabled:opacity-50">{saving ? <><LoaderCircle className="animate-spin" size={17} /> Guardando…</> : <><CheckCircle2 size={17} /> Confirmar e importar</>}</button>
+    <div className="sticky bottom-[5.5rem] z-10 flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-xl backdrop-blur lg:bottom-4 lg:rounded-3xl lg:p-4">
+      <div className="min-w-0 text-xs text-neutral-500">
+        <p className="text-sm font-semibold text-neutral-900">{selectedLines.length} productos · {money(detectedTotal)}</p>
+        {totalMismatch != null
+          ? <p className="mt-0.5 font-medium text-amber-700">{totalMismatch > 0 ? 'Faltan' : 'Sobran'} {money(Math.abs(totalMismatch))} para cuadrar<span className="hidden sm:inline"> con el total del ticket</span></p>
+          : <p className="mt-0.5 truncate">{parsedTotal != null ? 'Cuadra con el total' : 'Indica el total del ticket'}{ticketDiscount > 0 ? ` (con ${money(ticketDiscount)} de descuento)` : ''}<span className="hidden sm:inline"> · {pantryCount} a despensa</span></p>}
+      </div>
+      <button disabled={saving || !selectedLines.length} onClick={() => void importReceipt()} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 lg:rounded-2xl lg:py-3">{saving ? <><LoaderCircle className="animate-spin" size={17} /> Guardando…</> : <><CheckCircle2 size={17} /> Importar</>}</button>
     </div>
   </div>
 }

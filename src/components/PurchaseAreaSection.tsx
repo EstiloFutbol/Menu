@@ -11,13 +11,13 @@ export default function PurchaseAreaSection() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <p className="text-sm font-medium text-neutral-500">Compra</p>
-          <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Compra y precios</h1>
-          <p className="mt-2 text-sm text-neutral-500">Planifica la compra, importa tickets y conserva el histórico de precios.</p>
+      <header className="flex items-center justify-between gap-4 sm:items-end">
+        <div className="min-w-0">
+          <p className="hidden text-sm font-medium text-neutral-500 sm:block">Compra</p>
+          <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:mt-1 sm:text-3xl">Compra y precios</h1>
+          <p className="mt-2 hidden text-sm text-neutral-500 sm:block">Planifica la compra, importa tickets y conserva el histórico de precios.</p>
         </div>
-        <div className="grid grid-cols-3 rounded-2xl bg-neutral-100 p-1">
+        <div className="grid shrink-0 grid-cols-3 rounded-2xl bg-neutral-100 p-1">
           <button
             onClick={() => setView('lista')}
             className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${view === 'lista' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}
