@@ -138,7 +138,7 @@ export function extractReceiptTotal(text: string) {
 // año tiene cuatro cifras, para no confundirla con un precio). Si detrás viene la
 // hora ("19:55"), se usa; si no, las 12:00.
 export function extractReceiptDate(text: string) {
-  const match = text.match(/\b(\d{1,2})(?:[\/-](\d{1,2})[\/-](\d{2,4})|\.(\d{1,2})\.(\d{4}))\b(?:\s+(\d{1,2}):(\d{2})\b)?/)
+  const match = text.match(/\b(\d{1,2})(?:[\/-](\d{1,2})[\/-](\d{2,4})|\.(\d{1,2})\.(\d{4}))\b(?:\s+(\d{1,2}):\s?(\d{2})\b)?/)
   if (!match) return null
   const [, day, slashMonth, slashYear, dotMonth, dotYear, hours, minutes] = match
   const rawYear = slashYear ?? dotYear
@@ -187,4 +187,25 @@ export function parseQuantityFirstItem(line: string): ParsedReceiptLine | null {
   const rawName = cleanItemName(match[2])
   if (rawName.length < 2) return null
   return { rawName, packages: Number(match[1]), totalPrice: parseSpanishNumber(match[4]) }
+}
+
+// Lo que el OCR suele leer en lugar del "1" de la cantidad: "$", "|", "I", "l", "!", "A", "E"…
+export const misreadOne = String.raw`[$|Il!iAEJ]`
+// Línea de producto de un ticket fotografiado con la cantidad delante (Consum,
+// Mercadona…). Tolera ruido antes de la cantidad, una cantidad
+// mal leída y ruido después del importe ("3,75 —-", "1,69 _", "3,9511").
+const noisyQuantityRow = new RegExp(String.raw`^[^\p{L}]{0,8}?(?:\p{L}{1,2}\s+)?(?:(\d{1,3})|${misreadOne})[\s.,:;'"]+(\p{L}.*?)(?:\s[.,]?(\d{1,4},\d{2}))?\s[^\p{L}\d]*(\d{1,4},\d{2})\d{0,2}(?![,\d])(?!.*\p{L}{3})(?!.*\d,\d).{0,12}$`, 'u')
+
+export function parseNoisyQuantityItem(line: string): ParsedReceiptLine | null {
+  const row = normalizeOcrPrices(line.replace(/\s+/g, ' ').trim())
+  const match = row.match(noisyQuantityRow)
+  if (!match) return null
+  const rawName = cleanItemName(match[2])
+  if (rawName.length < 2 || !/\p{L}{2}/u.test(rawName)) return null
+  const packages = match[1] ? Number(match[1]) : 1
+  // "401,00": el OCR pega ruido delante del importe. Una línea de súper no llega a
+  // 100 €, así que se quedan las dos últimas cifras de la parte entera ("1,00").
+  const [integer, decimals] = match[4].split(',')
+  const price = Number(integer) >= 100 ? `${Number(integer.slice(-2))},${decimals}` : match[4]
+  return { rawName, packages: packages > 0 && packages < 100 ? packages : 1, totalPrice: parseSpanishNumber(price) }
 }
