@@ -5,6 +5,7 @@ import PantrySection from './components/PantrySection'
 import PurchaseAreaSection from './components/PurchaseAreaSection'
 import RecipesSection from './components/RecipesSection'
 import SettingsSection from './components/SettingsSection'
+import type { PantryNotice } from './lib/pantry-notice'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes'
 
@@ -17,7 +18,20 @@ const sections: Array<{ id: Section; label: string; icon: typeof CalendarDays }>
 ]
 
 function App() {
-  const [section, setSection] = useState<Section>('menu')
+  const [section, setSectionState] = useState<Section>('menu')
+  // Aviso para la despensa tras importar un ticket; se quita al cambiar de sección.
+  const [pantryNotice, setPantryNotice] = useState<PantryNotice | null>(null)
+
+  function setSection(next: Section) {
+    setPantryNotice(null)
+    setSectionState(next)
+  }
+
+  function showImportedInPantry(notice: PantryNotice) {
+    setSectionState('despensa')
+    setPantryNotice(notice)
+    window.scrollTo({ top: 0 })
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-neutral-900">
@@ -39,8 +53,8 @@ function App() {
           <div className="mx-auto w-full max-w-[1800px]">
             {section === 'menu' && <MenuSection />}
             {section === 'recetas' && <RecipesSection />}
-            {section === 'compra' && <PurchaseAreaSection />}
-            {section === 'despensa' && <PantrySection />}
+            {section === 'compra' && <PurchaseAreaSection onReceiptImported={showImportedInPantry} />}
+            {section === 'despensa' && <PantrySection notice={pantryNotice} onDismissNotice={() => setPantryNotice(null)} />}
             {section === 'ajustes' && <SettingsSection />}
           </div>
         </main>

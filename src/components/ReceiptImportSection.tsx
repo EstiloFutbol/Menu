@@ -9,6 +9,7 @@ import { convertCompatibleQuantity } from '../lib/domain'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
+import type { PantryNotice } from '../lib/pantry-notice'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -52,7 +53,8 @@ function lineId(index: number) {
   return `receipt-line-${Date.now()}-${index}`
 }
 
-export default function ReceiptImportSection() {
+// onImported: se llama tras importar un ticket que ha añadido productos a la despensa.
+export default function ReceiptImportSection({ onImported }: { onImported?: (notice: PantryNotice) => void }) {
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [aliases, setAliases] = useState<Alias[]>([])
   const [pantry, setPantry] = useState<PantryItem[]>([])
@@ -365,8 +367,20 @@ export default function ReceiptImportSection() {
     setSaving(false)
 
     if (importError) { setError(friendlyError(importError, 'No se pudo importar el ticket.')); return }
-    setSuccess(`Ticket importado. ${selectedLines.filter((line) => line.addToPantry).length} productos actualizados en la despensa.`)
+    const pantryLines = selectedLines.filter((line) => line.addToPantry)
+    const plural = (count: number) => `${count} producto${count === 1 ? '' : 's'}`
+    // Se limpia la revisión para no importar el mismo ticket dos veces.
+    reset()
     await loadReferenceData()
+    if (pantryLines.length && onImported) {
+      // Se lleva a la despensa para comprobar que todo ha entrado bien.
+      onImported({
+        message: `Ticket de ${storeName.trim()} importado: ${plural(pantryLines.length)} añadido${pantryLines.length === 1 ? '' : 's'} a la despensa.`,
+        names: pantryLines.map((line) => line.translatedName.trim()),
+      })
+      return
+    }
+    setSuccess(`Compra guardada en el historial (${plural(selectedLines.length)}). Ninguno se ha añadido a la despensa.`)
   }
 
   if (!lines.length && !reading) {
@@ -496,7 +510,7 @@ export default function ReceiptImportSection() {
                   : <span title={`Se creará el alimento “${line.translatedName || '…'}”`}>{field.category}</span>}
                 {field.quantity}{field.unit}{field.price}
                 <div className="flex justify-end">
-                  <button type="button" onClick={() => updateLine(line.id, { addToPantry: !line.addToPantry })} aria-pressed={line.addToPantry} title={line.addToPantry ? `Añadir a despensa. ${hint ?? ''}` : 'No se añadirá a la despensa'} className={`grid h-8 w-8 place-items-center rounded-lg ${line.addToPantry ? 'bg-emerald-50 text-emerald-700' : 'text-neutral-300 hover:bg-neutral-100'}`}><PackagePlus size={16} /></button>
+                  <button type="button" onClick={() => updateLine(line.id, { addToPantry: !line.addToPantry })} aria-pressed={line.addToPantry} title={line.addToPantry ? `Irá a la despensa. ${hint ?? ''}`.trim() : 'No irá a la despensa'} className={`grid h-8 w-8 place-items-center rounded-lg ${line.addToPantry ? 'bg-emerald-50 text-emerald-700' : 'text-neutral-300 hover:bg-neutral-100'}`}><PackagePlus size={16} /></button>
                   <button type="button" onClick={() => removeLine(line.id)} title="Quitar línea" aria-label="Quitar línea" className="grid h-8 w-8 place-items-center rounded-lg text-neutral-300 hover:bg-red-50 hover:text-red-600"><Trash2 size={16} /></button>
                 </div>
               </div>
@@ -541,7 +555,7 @@ export default function ReceiptImportSection() {
           ? <p className="mt-0.5 font-medium text-amber-700">{totalMismatch > 0 ? 'Faltan' : 'Sobran'} {money(Math.abs(totalMismatch))} para cuadrar<span className="hidden sm:inline"> con el total del ticket</span></p>
           : <p className="mt-0.5 truncate">{parsedTotal != null ? 'Cuadra con el total' : 'Indica el total del ticket'}{ticketDiscount > 0 ? ` (con ${money(ticketDiscount)} de descuento)` : ''}<span className="hidden sm:inline"> · {pantryCount} a despensa</span></p>}
       </div>
-      <button disabled={saving || !selectedLines.length} onClick={() => void importReceipt()} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 lg:rounded-2xl lg:py-3">{saving ? <><LoaderCircle className="animate-spin" size={17} /> Guardando…</> : <><CheckCircle2 size={17} /> Importar</>}</button>
+      <button disabled={saving || !selectedLines.length} onClick={() => void importReceipt()} className="flex shrink-0 items-center justify-center gap-2 rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50 lg:rounded-2xl lg:py-3">{saving ? <><LoaderCircle className="animate-spin" size={17} /> Guardando…</> : <><CheckCircle2 size={17} /> {pantryCount ? 'Añadir a despensa' : 'Guardar compra'}</>}</button>
     </div>
   </div>
 }
