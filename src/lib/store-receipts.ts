@@ -1,5 +1,7 @@
 import { isMercadonaReceipt, parseMercadonaReceipt, type ParsedStoreReceipt } from './mercadona'
-import { cleanItemName, extractReceiptDate, normalizeOcrPrices, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
+import { cleanItemName, extractReceiptDate, normalizeOcrPrices, parseNoisyQuantityItem, parseSpanishNumber, type ParsedReceiptLine } from './receipt'
+
+export { parseNoisyQuantityItem as parseConsumRow }
 
 export type { ParsedStoreReceipt }
 
@@ -21,26 +23,6 @@ export function isConsumReceipt(text: string) {
   return /\b(consum|charter)\b/i.test(text) || /importe a abonar|cant\.? art[ií]culo|socio-?cliente|total factura/i.test(text)
 }
 
-// Lo que el OCR suele leer en lugar del "1" de la cantidad: "$", "|", "I", "l", "!", "A", "E"…
-const misreadOne = String.raw`[$|Il!iAEJ]`
-// Línea de producto de Consum. Tolera ruido antes de la cantidad, una cantidad
-// mal leída y ruido después del importe ("3,75 —-", "1,69 _", "3,9511").
-const consumRow = new RegExp(String.raw`^[^\p{L}]{0,8}?(?:\p{L}{1,2}\s+)?(?:(\d{1,3})|${misreadOne})[\s.,:;'"]+(\p{L}.*?)(?:\s[.,]?(\d{1,4},\d{2}))?\s[^\p{L}\d]*(\d{1,4},\d{2})\d{0,2}(?![,\d])(?!.*\p{L}{3})(?!.*\d,\d).{0,12}$`, 'u')
-
-export function parseConsumRow(line: string): ParsedReceiptLine | null {
-  const row = normalizeOcrPrices(line.replace(/\s+/g, ' ').trim())
-  const match = row.match(consumRow)
-  if (!match) return null
-  const rawName = cleanItemName(match[2])
-  if (rawName.length < 2 || !/\p{L}{2}/u.test(rawName)) return null
-  const packages = match[1] ? Number(match[1]) : 1
-  // "401,00": el OCR pega ruido delante del importe. Una línea de súper no llega a
-  // 100 €, así que se quedan las dos últimas cifras de la parte entera ("1,00").
-  const [integer, decimals] = match[4].split(',')
-  const price = Number(integer) >= 100 ? `${Number(integer.slice(-2))},${decimals}` : match[4]
-  return { rawName, packages: packages > 0 && packages < 100 ? packages : 1, totalPrice: parseSpanishNumber(price) }
-}
-
 export function parseConsumReceipt(text: string): ParsedStoreReceipt {
   const rows = toRows(text)
   const isTotal = (line: string) => /^.{0,6}?\b(total factura|importe a abonar)\b/i.test(line)
@@ -57,7 +39,7 @@ export function parseConsumReceipt(text: string): ParsedStoreReceipt {
       if (amount) discount = round2(discount + Math.abs(parseSpanishNumber(amount[1]) ?? 0))
       continue
     }
-    const line = parseConsumRow(row)
+    const line = parseNoisyQuantityItem(row)
     if (line) lines.push(line)
   }
 

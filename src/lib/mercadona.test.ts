@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
+import first from './__fixtures__/mercadona-foto-1.txt?raw'
+import second from './__fixtures__/mercadona-foto-2.txt?raw'
 import { isMercadonaReceipt, parseMercadonaReceipt } from './mercadona'
 import { groupIntoLines } from './receipt-pdf'
+import { readReceiptTexts } from './receipt-read'
 
 // Fragmento del texto de un ticket digital de Mercadona, tal como sale del PDF.
 const ticket = `MERCADONA, S.A. A-46103834
@@ -55,5 +58,37 @@ describe('ticket digital de Mercadona', () => {
       { text: 'TOTAL (€)', x: 100, y: 480 },
       { text: 'Descripción', x: 10, y: 520 },
     ])).toEqual(['Descripción', '1 CEBOLLA TUBO 2,40', 'TOTAL (€)'])
+  })
+
+  describe('foto de un ticket en papel', () => {
+    // Dos lecturas reales (anonimizadas) de la misma foto, con la cabecera, el TOTAL
+    // y varios importes mal leídos.
+    it('apunta el producto aunque no se lea su importe', () => {
+      const result = parseMercadonaReceipt(first)
+      expect(result.lines[0]).toEqual({ rawName: 'PEPINO HOLANDES', packages: 1, totalPrice: null })
+      expect(result.lines).toHaveLength(10)
+    })
+
+    it('lee "16 HUEVOS" como 1 paquete de "6 HUEVOS" y tolera ruido tras el importe', () => {
+      expect(parseMercadonaReceipt(first).lines[9]).toEqual({ rawName: '6 HUEVOS CAMPEROS', packages: 1, totalPrice: 1.95 })
+      const lines = parseMercadonaReceipt(second).lines
+      expect(lines.find((line) => line.rawName.includes('HUEVOS'))).toMatchObject({ rawName: '6 HUEVOS CAMPEROS', packages: 1 })
+      expect(lines.find((line) => line.rawName.startsWith('ENS.IV'))?.totalPrice).toBe(0.85)
+    })
+
+    it('saca el total del importe pagado y del IVA si la línea del TOTAL está mal leída', () => {
+      expect(parseMercadonaReceipt(first).total).toBe(26.8)
+      expect(parseMercadonaReceipt(second).total).toBe(26.8)
+      expect(parseMercadonaReceipt(first).date).toEqual(new Date(2026, 10, 17, 10, 13))
+    })
+
+    it('combina las dos lecturas sin perder productos', () => {
+      const reading = readReceiptTexts([first, second])
+      expect(reading.total).toBe(26.8)
+      expect(reading.lines.map((line) => line.rawName)).toEqual([
+        'PEPINO HOLANDES', 'UVA BLANCA S/SEM', 'ENS.IV ESTACTONES', 'CEBO TAPAS', 'BAGUETTE',
+        'QUESO UNTAR LIGHT', 'BURRATA', 'WAKAME', 'LOMO SALMÓN NORUEGO', '6 HUEVOS CAMPEROS',
+      ])
+    })
   })
 })

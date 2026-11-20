@@ -18,7 +18,10 @@ export type ReceiptReading = {
 export function readReceiptTexts(texts: string[]): ReceiptReading {
   const storeReadings = texts.map(parseStoreReceipt).filter((receipt): receipt is ParsedStoreReceipt => receipt !== null)
   if (storeReadings.length) {
-    const total = storeReadings.find((receipt) => receipt.total != null)?.total ?? null
+    // El total que más lecturas coinciden en dar (a igualdad, el de la mejor lectura).
+    const totals = storeReadings.map((receipt) => receipt.total).filter((value): value is number => value != null)
+    const total = totals.reduce<number | null>((best, value) =>
+      best == null || totals.filter((other) => other === value).length > totals.filter((other) => other === best).length ? value : best, null)
     const date = storeReadings.find((receipt) => receipt.date)?.date ?? null
     const discount = storeReadings.find((receipt) => receipt.discount)?.discount ?? 0
     return {
