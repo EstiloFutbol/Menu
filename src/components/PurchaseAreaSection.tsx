@@ -3,10 +3,11 @@ import { useState } from 'react'
 import PurchaseHistorySection from './PurchaseHistorySection'
 import ReceiptImportSection from './ReceiptImportSection'
 import ShoppingSection from './ShoppingSection'
+import type { PantryNotice } from '../lib/pantry-notice'
 
 type View = 'lista' | 'ticket' | 'historial'
 
-export default function PurchaseAreaSection() {
+export default function PurchaseAreaSection({ onReceiptImported }: { onReceiptImported?: (notice: PantryNotice) => void }) {
   const [view, setView] = useState<View>('lista')
 
   return (
@@ -40,7 +41,7 @@ export default function PurchaseAreaSection() {
       </header>
 
       {view === 'lista' && <ShoppingSection />}
-      {view === 'ticket' && <ReceiptImportSection />}
+      {view === 'ticket' && <ReceiptImportSection onImported={onReceiptImported} />}
       {view === 'historial' && <PurchaseHistorySection />}
     </div>
   )
