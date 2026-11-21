@@ -1,6 +1,7 @@
-import { ChevronLeft, Clock3, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
-import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
+import { ChevronLeft, Clock3, FileUp, LoaderCircle, Pencil, Plus, Search, Trash2, X } from 'lucide-react'
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../lib/errors'
+import { guessCategory, matchCatalogName, parseRecipeText } from '../lib/recipe-import'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 
@@ -255,6 +256,12 @@ export default function RecipesSection() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Importar una receta desde un documento o un texto pegado.
+  const [importOpen, setImportOpen] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importing, setImporting] = useState(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importNotice, setImportNotice] = useState<{ source: string; unread: string[]; newCount: number; duplicate: boolean } | null>(null)
 
   const loadData = useCallback(async () => {
     if (!supabase) return
@@ -321,6 +328,78 @@ export default function RecipesSection() {
     setMode('form')
   }
 
+  // Rellena el formulario con la receta leída; nada se guarda hasta pulsar «Guardar».
+  const applyImport = (text: string, source: string) => {
+    const parsed = parseRecipeText(text)
+    if (!parsed.name && !parsed.ingredients.length) {
+      setImportError('No he encontrado una receta en ese texto. Comprueba que tenga un apartado «Ingredientes».')
+      return
+    }
+    const drafts: IngredientDraft[] = []
+    for (const item of parsed.ingredients) {
+      const match = matchCatalogName(item.name, ingredients)
+      const draft: IngredientDraft = match
+        ? { ingredientId: match.item.id, name: match.item.name, category: match.item.category ?? 'Otros', quantity: String(item.quantity), unit: item.unit, notes: [match.extra, item.notes].filter(Boolean).join(', '), isNew: false }
+        : { ingredientId: '', name: item.name, category: guessCategory(item.name), quantity: String(item.quantity), unit: item.unit, notes: item.notes, isNew: true }
+      // El mismo alimento dos veces con la misma unidad (p. ej. «Tomate maduro» y «Tomate rallado»): se suman.
+      const same = drafts.find((other) => other.unit === draft.unit && other.name.toLocaleLowerCase('es') === draft.name.toLocaleLowerCase('es'))
+      if (same) {
+        same.quantity = String(Math.round((Number(same.quantity) + Number(draft.quantity)) * 100) / 100)
+        same.notes = [same.notes, draft.notes].filter(Boolean).join('; ')
+      } else drafts.push(draft)
+    }
+    setEditingId(null)
+    setForm({
+      ...emptyForm(),
+      name: parsed.name,
+      description: parsed.description,
+      preparationMinutes: parsed.preparationMinutes?.toString() ?? '',
+      servings: parsed.servings?.toString() ?? '1',
+      ingredients: drafts,
+      steps: parsed.steps.length ? parsed.steps : [''],
+    })
+    setImportNotice({
+      source,
+      unread: parsed.unread,
+      newCount: drafts.filter((item) => item.isNew).length,
+      duplicate: recipes.some((recipe) => recipe.name.toLocaleLowerCase('es') === parsed.name.toLocaleLowerCase('es')),
+    })
+    setImportOpen(false)
+    setImportText('')
+    setImportError(null)
+    setError(null)
+    setMode('form')
+  }
+
+  const importFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setImporting(true)
+    setImportError(null)
+    try {
+      const lower = file.name.toLowerCase()
+      let text: string
+      if (lower.endsWith('.docx')) {
+        const { extractDocxText } = await import('../lib/recipe-docx')
+        text = await extractDocxText(await file.arrayBuffer())
+      } else if (lower.endsWith('.pdf') || file.type === 'application/pdf') {
+        const { extractPdfText } = await import('../lib/receipt-pdf')
+        text = await extractPdfText(file)
+      } else if (lower.endsWith('.doc')) {
+        throw new Error('Los .doc antiguos no se pueden leer. Guárdalo como .docx o PDF, o copia y pega el texto.')
+      } else {
+        text = await file.text()
+      }
+      if (!text.trim()) throw new Error('El archivo no tiene texto. Si es un PDF escaneado, copia y pega el texto.')
+      applyImport(text, file.name)
+    } catch (cause) {
+      setImportError(friendlyError(cause, 'No se pudo leer el archivo.'))
+    } finally {
+      setImporting(false)
+    }
+  }
+
   const saveRecipe = async (event: FormEvent) => {
     event.preventDefault()
     if (!supabase) return
@@ -371,6 +450,7 @@ export default function RecipesSection() {
 
     setSaving(false)
     setMode('list')
+    setImportNotice(null)
     setForm(emptyForm())
     setEditingId(null)
     await loadData()
@@ -388,12 +468,12 @@ export default function RecipesSection() {
       <form onSubmit={saveRecipe} className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => setMode('list')} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50">
+            <button type="button" onClick={() => { setMode('list'); setImportNotice(null) }} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50">
               <ChevronLeft size={19} />
             </button>
             <div>
               <p className="text-sm font-medium text-neutral-500">Recetas</p>
-              <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">{editingId ? 'Editar receta' : 'Nueva receta'}</h1>
+              <h1 className="text-2xl font-semibold tracking-tight text-neutral-950">{editingId ? 'Editar receta' : importNotice ? 'Receta importada' : 'Nueva receta'}</h1>
             </div>
           </div>
           <button disabled={saving} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">
@@ -402,6 +482,15 @@ export default function RecipesSection() {
         </div>
 
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+        {importNotice && (
+          <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+            <p>Receta leída de «{importNotice.source}». Revisa ingredientes, cantidades y pasos antes de guardar; nada se guarda hasta pulsar «Guardar».</p>
+            {importNotice.newCount > 0 && <p className="text-emerald-800">{importNotice.newCount === 1 ? '1 ingrediente no está' : `${importNotice.newCount} ingredientes no están`} en tu catálogo: se {importNotice.newCount === 1 ? 'creará' : 'crearán'} al guardar con la categoría indicada.</p>}
+            {importNotice.duplicate && <p className="font-medium text-amber-800">Ya tienes una receta con este nombre: al guardar se creará otra.</p>}
+            {importNotice.unread.length > 0 && <div className="text-amber-800"><p className="font-medium">No se han podido leer como ingredientes (añádelos a mano si hace falta):</p><ul className="mt-1 list-disc pl-5">{importNotice.unread.map((line) => <li key={line}>{line}</li>)}</ul></div>}
+          </div>
+        )}
 
         <section className="rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm sm:p-6">
           <h2 className="text-base font-semibold">Información básica</h2>
@@ -510,10 +599,40 @@ export default function RecipesSection() {
           <p className="text-sm font-medium text-neutral-500">Tu colección</p>
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Recetas</h1>
         </div>
-        <button onClick={startCreate} className="flex items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700">
-          <Plus size={17} /> Nueva receta
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => { setImportOpen(true); setImportError(null) }} className="flex flex-1 items-center justify-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 hover:bg-neutral-50 sm:flex-none">
+            <FileUp size={17} /> Importar receta
+          </button>
+          <button onClick={startCreate} className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white hover:bg-neutral-700 sm:flex-none">
+            <Plus size={17} /> Nueva receta
+          </button>
+        </div>
       </div>
+
+      {importOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && !importing && setImportOpen(false)}>
+          <div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-xl sm:rounded-3xl sm:p-6">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold tracking-tight">Importar receta</h2>
+                <p className="mt-1 text-sm text-neutral-500">Sube un documento (Word .docx, PDF o texto) o pega la receta. Se lee en tu dispositivo y podrás revisarla antes de guardar.</p>
+              </div>
+              <button type="button" disabled={importing} onClick={() => setImportOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar"><X size={19} /></button>
+            </div>
+            <label className={`mt-5 flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white ${importing ? 'opacity-60' : ''}`}>
+              {importing ? <><LoaderCircle className="animate-spin" size={18} /> Leyendo…</> : <><FileUp size={18} /> Elegir documento</>}
+              <input type="file" disabled={importing} accept=".docx,.pdf,.txt,.md,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onChange={(event) => void importFile(event)} className="hidden" />
+            </label>
+            <div className="my-4 flex items-center gap-3 text-xs text-neutral-400"><span className="h-px flex-1 bg-neutral-200" />o pega el texto<span className="h-px flex-1 bg-neutral-200" /></div>
+            <textarea rows={8} value={importText} onChange={(event) => setImportText(event.target.value)} placeholder={'Nombre de la receta\nPara 2 personas\n\nIngredientes\n400 g de alubias cocidas\n1 cebolla\n\nPreparación\n1. Pica la cebolla…'} className="w-full rounded-2xl border border-neutral-200 px-3.5 py-3 text-sm outline-none focus:border-neutral-400" />
+            {importError && <div className="mt-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{importError}</div>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" disabled={importing} onClick={() => setImportOpen(false)} className="rounded-2xl px-4 py-2.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100">Cancelar</button>
+              <button type="button" disabled={importing || !importText.trim()} onClick={() => applyImport(importText, 'el texto pegado')} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-40">Leer receta</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="relative max-w-md">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" size={17} />
