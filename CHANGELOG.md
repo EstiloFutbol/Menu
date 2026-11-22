@@ -3,8 +3,14 @@
 Cada cambio que llega a la app sube la versión y se apunta aquí. La versión de
 arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 
-- Arreglos o retoques pequeños: sube el último número (0.4.0 → 0.4.1).
-- Funciones nuevas: sube el número del medio (0.4.1 → 0.5.0).
+- Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
+- El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
+
+## 0.5.1 — 2026-11-23
+
+- Menú: ya se puede deshacer una receta o un producto marcado como consumido (botón «Deshacer» o ↺ al abrir la franja). Vuelve a quedar pendiente y se devuelve a la despensa exactamente lo que se descontó; si no se descontó nada, no se devuelve nada.
+- Despensa: al consumir, si había menos de lo necesario, se apunta lo que de verdad se quitó para poder devolverlo bien.
+- Versiones: a partir de ahora cada cambio sube solo el último número.
 
 ## 0.5.0 — 2026-11-22
 

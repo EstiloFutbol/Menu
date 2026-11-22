@@ -19,9 +19,8 @@ Aplicación personal para planificar el menú semanal, gestionar recetas, la com
 - Lógica de dominio en `src/lib/` con tests en Vitest (fixtures OCR en `__fixtures__/`).
 
 ## Versiones
-- Cada PR que cambie la app sube la versión con `npm version <x.y.z> --no-git-tag-version` (actualiza `package.json` y `package-lock.json`):
-  - arreglos o retoques pequeños → último número (0.4.0 → 0.4.1);
-  - funciones nuevas → número del medio (0.4.1 → 0.5.0).
+- Cada PR que cambie la app sube **solo el último número** con `npm version <x.y.z> --no-git-tag-version` (actualiza `package.json` y `package-lock.json`): 0.5.0 → 0.5.1 → … → 0.5.12 (puede pasar de 9), sea arreglo o función nueva.
+- El número del medio solo sube cuando el propietario lo pida para marcar un hito (p. ej. terminar una fase): 0.5.12 → 0.6.0. La 1.0.0 será cuando dé la app por terminada.
 - Y añade arriba en `CHANGELOG.md` una entrada `## x.y.z — AAAA-MM-DD` con los cambios en lenguaje sencillo, pensados para quien usa la app. Se muestran en Ajustes → Cuenta → Sobre la app.
 - Un test comprueba que la versión de `package.json` tiene su entrada en `CHANGELOG.md`.
 - Si dos PR abiertas suben la misma versión, la que se mergee después debe subirla otra vez antes de mergear.
