@@ -60,6 +60,11 @@ describe('ticket digital de Mercadona', () => {
     ])).toEqual(['Descripción', '1 CEBOLLA TUBO 2,40', 'TOTAL (€)'])
   })
 
+  it('quita la cantidad repetida delante del nombre', () => {
+    const result = parseMercadonaReceipt('MERCADONA S.A.\nDescripción P. Unit Importe\n1 1 CEBO TAPAS 6,79\n1 | QUESO UNTAR LIGHT 1,40\n1 6 HUEVOS CAMPEROS 1,95\nTOTAL (€) 10,14')
+    expect(result.lines.map((line) => line.rawName)).toEqual(['CEBO TAPAS', 'QUESO UNTAR LIGHT', '6 HUEVOS CAMPEROS'])
+  })
+
   describe('foto de un ticket en papel', () => {
     // Dos lecturas reales (anonimizadas) de la misma foto, con la cabecera, el TOTAL
     // y varios importes mal leídos.

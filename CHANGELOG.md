@@ -6,6 +6,12 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.5 — 2026-11-25
+
+- Tickets en foto: la app busca el ticket en la foto, lo recorta y lo endereza (también si está en perspectiva) antes de leerlo, así el texto se lee más grande y recto. Además lee una versión enfocada de la imagen.
+- Tickets en foto: cada precio se decide por mayoría entre las distintas lecturas. El total del ticket solo se usa para desempatar, así no se dan por buenos precios mal leídos que cuadran por casualidad.
+- Tickets de Mercadona: ya no aparece un «1» de más delante de algunos nombres.
+
 ## 0.5.4 — 2026-11-25
 
 - Menú: nuevo botón «Copiar semana» para copiar toda la planificación de la semana que estás viendo a otra (por defecto, la siguiente). Si la otra semana ya tiene cosas, eliges entre añadir a lo que hay o sustituir lo pendiente (lo ya consumido se conserva). Todo se copia como pendiente.

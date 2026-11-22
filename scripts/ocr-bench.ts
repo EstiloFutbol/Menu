@@ -74,7 +74,9 @@ for (const photo of photos) {
   const variants = buildReceiptPixelVariants(data, width, height)
   const readings: { text: string; score: number }[] = []
   for (const variant of variants) {
-    const png = await sharp(Buffer.from(variant.image.data), { raw: { width, height, channels: 1 } }).png().toBuffer()
+    // La imagen ya recortada y enderezada puede medir distinto que la foto.
+    const png = await sharp(Buffer.from(variant.image.data), { raw: { width: variant.image.width, height: variant.image.height, channels: 1 } }).png().toBuffer()
+    writeFileSync(join(outFolder, `${name}.${variant.label.replace(/\s+/g, '-')}.png`), png)
     const result = await worker.recognize(png)
     readings.push({ text: result.data.text, score: scoreReceiptText(result.data.text, result.data.confidence) })
     writeFileSync(join(outFolder, `${name}.${variant.label.replace(/\s+/g, '-')}.txt`), result.data.text)

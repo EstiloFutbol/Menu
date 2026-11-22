@@ -59,6 +59,17 @@ describe('combinar lecturas', () => {
     expect(merged.map((line) => line.totalPrice)).toEqual([1.7, 0.95])
   })
 
+  it('se queda con el precio que dan más lecturas, aunque otra combinación cuadre por casualidad', () => {
+    // La primera lectura falla en dos precios que se compensan (4,35 + 5,93 = 4,36 + 5,92).
+    const line = (rawName: string, totalPrice: number) => ({ rawName, totalPrice, packages: null })
+    const merged = mergeReceiptReadings([
+      [line('UVA', 4.35), line('SALMON', 5.93), line('PAN', 1)],
+      [line('UVA', 4.36), line('SALMON', 5.95), line('PAN', 1)],
+      [line('UVA', 4.36), line('SALMON', 5.95), line('PAN', 1)],
+    ], 11.28)
+    expect(merged.map((item) => item.totalPrice)).toEqual([4.36, 5.95, 1])
+  })
+
   it('reconoce el mismo producto leído con pequeñas diferencias', () => {
     expect(nameSimilarity('MORTADELLA BOLOGNA', 'AORTADELLA BOLOGNS')).toBeGreaterThan(0.7)
     expect(nameSimilarity('PAN BLANCO', 'LECHE SEMI')).toBeLessThan(0.3)
