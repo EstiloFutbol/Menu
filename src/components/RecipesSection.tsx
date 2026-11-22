@@ -4,6 +4,8 @@ import { friendlyError } from '../lib/errors'
 import { guessCategory, matchCatalogName, parseRecipeText } from '../lib/recipe-import'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
+import { setLeaveGuard } from '../lib/leave-guard'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = [
@@ -262,6 +264,9 @@ export default function RecipesSection() {
   const [importing, setImporting] = useState(false)
   const [importError, setImportError] = useState<string | null>(null)
   const [importNotice, setImportNotice] = useState<{ source: string; unread: string[]; newCount: number; duplicate: boolean } | null>(null)
+  // Formulario tal como se abrió, para saber si hay cambios sin guardar.
+  const [savedSnapshot, setSavedSnapshot] = useState(() => JSON.stringify(emptyForm()))
+  const [confirmBack, setConfirmBack] = useState(false)
 
   const loadData = useCallback(async () => {
     if (!supabase) return
@@ -296,13 +301,14 @@ export default function RecipesSection() {
   const startCreate = () => {
     setEditingId(null)
     setForm(emptyForm())
+    setSavedSnapshot(JSON.stringify(emptyForm()))
     setError(null)
     setMode('form')
   }
 
   const startEdit = (recipe: Recipe) => {
     setEditingId(recipe.id)
-    setForm({
+    const loaded: FormState = {
       name: recipe.name,
       description: recipe.description ?? '',
       preparationMinutes: recipe.preparation_minutes?.toString() ?? '',
@@ -323,7 +329,9 @@ export default function RecipesSection() {
         isNew: false,
       })),
       steps: recipe.recipe_steps.length ? recipe.recipe_steps.map((step) => step.instruction) : [''],
-    })
+    }
+    setForm(loaded)
+    setSavedSnapshot(JSON.stringify(loaded))
     setError(null)
     setMode('form')
   }
@@ -364,6 +372,7 @@ export default function RecipesSection() {
       newCount: drafts.filter((item) => item.isNew).length,
       duplicate: recipes.some((recipe) => recipe.name.toLocaleLowerCase('es') === parsed.name.toLocaleLowerCase('es')),
     })
+    setSavedSnapshot(JSON.stringify(emptyForm()))
     setImportOpen(false)
     setImportText('')
     setImportError(null)
@@ -402,13 +411,19 @@ export default function RecipesSection() {
 
   const saveRecipe = async (event: FormEvent) => {
     event.preventDefault()
-    if (!supabase) return
-    if (!form.name.trim()) return setError('La receta necesita un nombre.')
-    if (Number(form.servings) <= 0) return setError('Las raciones deben ser mayores que cero.')
-    if (form.ingredients.some((item) => !item.name.trim() || Number(item.quantity) <= 0)) return setError('Revisa los ingredientes y sus cantidades.')
+    await persistRecipe()
+  }
+
+  // Guarda la receta del formulario. Devuelve false si falta algo o falla el guardado.
+  const persistRecipe = async (): Promise<boolean> => {
+    if (!supabase) return false
+    const invalid = (message: string) => { setError(message); return false }
+    if (!form.name.trim()) return invalid('La receta necesita un nombre.')
+    if (Number(form.servings) <= 0) return invalid('Las raciones deben ser mayores que cero.')
+    if (form.ingredients.some((item) => !item.name.trim() || Number(item.quantity) <= 0)) return invalid('Revisa los ingredientes y sus cantidades.')
     const ingredientKeys = form.ingredients.map((item) => `${item.ingredientId || item.name.trim().toLocaleLowerCase('es')}:${item.unit}`)
     const repeated = form.ingredients.find((_, index) => ingredientKeys.indexOf(ingredientKeys[index]) !== index)
-    if (repeated) return setError(`“${repeated.name.trim()}” aparece dos veces con la misma unidad. Júntalo en una sola línea.`)
+    if (repeated) return invalid(`“${repeated.name.trim()}” aparece dos veces con la misma unidad. Júntalo en una sola línea.`)
 
     setSaving(true)
     setError(null)
@@ -445,16 +460,38 @@ export default function RecipesSection() {
     if (saveError) {
       setError(friendlyError(saveError, 'No se pudo guardar la receta.', { duplicate: 'Hay un ingrediente repetido con la misma unidad. Júntalos en una sola línea.' }))
       setSaving(false)
-      return
+      return false
     }
 
     setSaving(false)
+    setLeaveGuard(null)
     setMode('list')
     setImportNotice(null)
     setForm(emptyForm())
+    setSavedSnapshot(JSON.stringify(emptyForm()))
     setEditingId(null)
     await loadData()
+    return true
   }
+
+  const leaveForm = () => {
+    setLeaveGuard(null)
+    setConfirmBack(false)
+    setMode('list')
+    setImportNotice(null)
+  }
+
+  // Cambios sin guardar: se avisa al cambiar de sección, al volver a la lista y al cerrar la página.
+  const dirty = mode === 'form' && JSON.stringify(form) !== savedSnapshot
+  const guardName = form.name.trim() ? `la receta «${form.name.trim()}»` : 'la receta'
+  useEffect(() => {
+    if (!dirty) { setLeaveGuard(null); return }
+    setLeaveGuard({ what: guardName, save: persistRecipe })
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  })
+  useEffect(() => () => setLeaveGuard(null), [])
 
   const deleteRecipe = async (recipe: Recipe) => {
     if (!supabase || !window.confirm(`¿Eliminar “${recipe.name}”?`)) return
@@ -468,7 +505,7 @@ export default function RecipesSection() {
       <form onSubmit={saveRecipe} className="mx-auto max-w-4xl space-y-6">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <button type="button" onClick={() => { setMode('list'); setImportNotice(null) }} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50">
+            <button type="button" onClick={() => { if (dirty) setConfirmBack(true); else leaveForm() }} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50">
               <ChevronLeft size={19} />
             </button>
             <div>
@@ -482,6 +519,7 @@ export default function RecipesSection() {
         </div>
 
         {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+        {confirmBack && <UnsavedChangesDialog guard={{ what: guardName, save: persistRecipe }} onStay={() => setConfirmBack(false)} onLeave={leaveForm} />}
 
         {importNotice && (
           <div className="space-y-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">

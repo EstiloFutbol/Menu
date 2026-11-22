@@ -6,6 +6,13 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.2 — 2026-11-24
+
+- Menú: al añadir un producto a una franja ya no solo salen los de la despensa: después aparece el resto del catálogo (irá a la lista de la compra) y la opción «+ Crear producto nuevo…» para crearlo ahí mismo.
+- Menú (móvil): en cada producto de una franja, el nombre ocupa toda la fila y la cantidad y la unidad van debajo, para que se lea bien.
+- Productos básicos: las cuentas empiezan con unos 120 productos habituales (arroz, huevos, tomate, aceite, pollo…) para no crear el catálogo desde cero. Nunca se duplican los que ya tienes. En Despensa → Productos, «Añadir productos básicos» añade los que falten.
+- Recetas: si sales de una receta a medias (cambiando de sección, con la flecha de volver o cerrando la página), la app pregunta si quieres guardarla, salir sin guardar o seguir editando.
+
 ## 0.5.1 — 2026-11-23
 
 - Menú: ya se puede deshacer una receta o un producto marcado como consumido (botón «Deshacer» o ↺ al abrir la franja). Vuelve a quedar pendiente y se devuelve a la despensa exactamente lo que se descontó; si no se descontó nada, no se devuelve nada.
