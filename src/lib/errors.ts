@@ -34,6 +34,9 @@ const knownMessages: Record<string, string> = {
   'Ingredient quantity cannot be negative': 'La cantidad no puede ser negativa.',
   'Recipe not found': 'No se ha encontrado la receta.',
   'Recipe name is required': 'La receta necesita un nombre.',
+  'Este producto ya tiene uso en recetas, menú, compras o consumos. No se puede eliminar sin perder histórico.': 'Este producto se ha usado en recetas, menú, compras o consumos, así que no se puede borrar sin perder el histórico. Puedes fusionarlo con otro producto.',
+  'Cannot merge a product with itself': 'Elige un producto distinto para fusionar.',
+  'Merge conflict in menu': 'Los dos productos están en la misma franja del menú con unidades que no se pueden sumar. Quita uno de esa franja y vuelve a intentarlo.',
   'Slot has consumption': 'No puedes convertir en “Comida fuera” una franja que ya tiene consumos registrados.',
 }
 
@@ -50,6 +53,8 @@ export function friendlyError(cause: unknown, fallback: string, overrides: Error
   if (!message && !code) return fallback
 
   if (knownMessages[message]) return knownMessages[message]
+  const pantryConflict = message.match(/^Merge conflict in pantry: ([\d.]+) (\S+) and ([\d.]+) (\S+)/)
+  if (pantryConflict) return `En la despensa tienes uno en ${pantryConflict[2]} y el otro en ${pantryConflict[4]}, y no se pueden sumar. Ajusta uno de los dos en Despensa y vuelve a intentarlo.`
   if (message.startsWith('Incompatible pantry unit')) return 'La unidad no es compatible con la que tienes en despensa.'
   if (code === '23503') return overrides.inUse ?? 'No se puede completar porque está en uso en otra parte de la app.'
   if (code === '23505') return overrides.duplicate ?? 'Ya existe un elemento igual.'
