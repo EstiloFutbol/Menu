@@ -37,6 +37,7 @@ const knownMessages: Record<string, string> = {
   'Este producto ya tiene uso en recetas, menú, compras o consumos. No se puede eliminar sin perder histórico.': 'Este producto se ha usado en recetas, menú, compras o consumos, así que no se puede borrar sin perder el histórico. Puedes fusionarlo con otro producto.',
   'Cannot merge a product with itself': 'Elige un producto distinto para fusionar.',
   'Merge conflict in menu': 'Los dos productos están en la misma franja del menú con unidades que no se pueden sumar. Quita uno de esa franja y vuelve a intentarlo.',
+  'Consumption not found': 'Ese consumo ya no existe. Recarga la página.',
   'Slot has consumption': 'No puedes convertir en “Comida fuera” una franja que ya tiene consumos registrados.',
 }
 

@@ -190,6 +190,8 @@ La migración `20261119000100_user_settings.sql` añade `user_settings`, con las
 
 La migración `20261122000100_merge_ingredients.sql` añade `merge_ingredients`, que fusiona un producto del catálogo con otro en una sola transacción: recetas (sumando cantidades si la receta ya tenía el destino con la misma unidad), menú, lista de la compra, compras, consumos, despensa (sumando con conversión g↔kg y ml↔l) y traducciones de tickets pasan al destino, se crea una traducción con el nombre del origen y el origen se borra. Si algo no se puede sumar, no cambia nada. Hay que aplicarla en Supabase.
 
+La migración `20261123000100_undo_consumption.sql` permite deshacer un consumo del menú con `undo_consumption`. Al completar una receta o un producto, ahora se guarda lo realmente descontado de la despensa (`pantry_deducted_quantity` y `pantry_deducted_unit`, nunca más de lo que había). Al deshacer, se devuelve exactamente eso (nada si no se descontó nada), se borra el consumo y la franja vuelve a quedar pendiente. Los consumos anteriores a la migración devuelven la cantidad consumida apuntada. Hay que aplicarla en Supabase.
+
 ## Desarrollo local
 
 ```bash
