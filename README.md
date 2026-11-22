@@ -194,6 +194,8 @@ La migración `20261123000100_undo_consumption.sql` permite deshacer un consumo 
 
 La migración `20261124000100_basic_ingredients.sql` añade el catálogo de productos básicos (`basic_ingredient_catalog`, unos 120 productos con categoría y unidad habitual). `seed_basic_ingredients` añade a una cuenta los que le falten, sin duplicar los que ya tiene con el mismo nombre (sin mayúsculas ni tildes) ni los que tiene con un nombre más concreto que empieza igual. Al aplicarla los reciben las cuentas existentes, y un trigger en `auth.users` se los da a cada cuenta nueva. Desde la app, `add_basic_ingredients` añade los que falten a la cuenta con sesión iniciada. Hay que aplicarla en Supabase.
 
+La migración `20261125000100_copy_menu_week.sql` añade `copy_menu_week`, que copia en una sola transacción todas las franjas de una semana a otra (mismo día y comida), con sus recetas y productos como pendientes. Con `p_replace` quita antes lo pendiente de la semana de destino, conservando siempre lo consumido. «Comida fuera» solo se copia a franjas vacías, y las franjas de destino que son «Comida fuera» no reciben nada; ambos casos se devuelven en `skipped`. Hay que aplicarla en Supabase.
+
 ## Desarrollo local
 
 ```bash
