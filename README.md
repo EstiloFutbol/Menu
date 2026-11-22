@@ -192,6 +192,8 @@ La migración `20261122000100_merge_ingredients.sql` añade `merge_ingredients`,
 
 La migración `20261123000100_undo_consumption.sql` permite deshacer un consumo del menú con `undo_consumption`. Al completar una receta o un producto, ahora se guarda lo realmente descontado de la despensa (`pantry_deducted_quantity` y `pantry_deducted_unit`, nunca más de lo que había). Al deshacer, se devuelve exactamente eso (nada si no se descontó nada), se borra el consumo y la franja vuelve a quedar pendiente. Los consumos anteriores a la migración devuelven la cantidad consumida apuntada. Hay que aplicarla en Supabase.
 
+La migración `20261124000100_basic_ingredients.sql` añade el catálogo de productos básicos (`basic_ingredient_catalog`, unos 120 productos con categoría y unidad habitual). `seed_basic_ingredients` añade a una cuenta los que le falten, sin duplicar los que ya tiene con el mismo nombre (sin mayúsculas ni tildes) ni los que tiene con un nombre más concreto que empieza igual. Al aplicarla los reciben las cuentas existentes, y un trigger en `auth.users` se los da a cada cuenta nueva. Desde la app, `add_basic_ingredients` añade los que falten a la cuenta con sesión iniciada. Hay que aplicarla en Supabase.
+
 ## Desarrollo local
 
 ```bash

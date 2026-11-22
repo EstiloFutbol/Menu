@@ -1,5 +1,5 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
-import { Merge, PackagePlus, Pencil, Search, Trash2, X } from 'lucide-react'
+import { ListPlus, Merge, PackagePlus, Pencil, Search, Trash2, X } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 
@@ -43,6 +43,7 @@ export default function ProductCatalogSection() {
   const [mergeSaving, setMergeSaving] = useState(false)
   const [mergeError, setMergeError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [addingBasics, setAddingBasics] = useState(false)
 
   const load = useCallback(async () => {
     if (!supabase) return
@@ -168,6 +169,25 @@ export default function ProductCatalogSection() {
     await load()
   }
 
+  // Añade los productos básicos que falten (no duplica los que ya tienes).
+  async function addBasicProducts() {
+    if (!supabase) return
+    setAddingBasics(true)
+    setError(null)
+    setNotice(null)
+    const { data, error: basicsError } = await supabase.rpc('add_basic_ingredients')
+    setAddingBasics(false)
+    if (basicsError) {
+      setError(/add_basic_ingredients/.test(basicsError.message ?? '') && /function|schema cache/i.test(basicsError.message ?? '')
+        ? 'Falta aplicar en Supabase la migración 20261124000100_basic_ingredients.sql.'
+        : friendlyError(basicsError, 'No se pudieron añadir los productos básicos.'))
+      return
+    }
+    const added = Number(data ?? 0)
+    setNotice(added ? `Se han añadido ${added} producto${added === 1 ? '' : 's'} básico${added === 1 ? '' : 's'} al catálogo.` : 'Ya tenías todos los productos básicos.')
+    await load()
+  }
+
   function openMerge(source: Ingredient, reason: string | null = null) {
     setMerging({ source, reason })
     // Se propone el producto cuyo nombre más se parece («Lomo salmón noruego» → «Salmón»).
@@ -258,9 +278,14 @@ export default function ProductCatalogSection() {
         <h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">Productos creados</h2>
         <p className="mt-2 text-sm text-neutral-500">Gestiona todos los productos disponibles, estén o no actualmente en tu despensa.</p>
       </div>
-      <button onClick={openCreate} className="flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">
-        <PackagePlus size={17} /> Nuevo producto
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button onClick={() => void addBasicProducts()} disabled={addingBasics} title="Añade arroz, huevos, tomate, aceite… sin duplicar los que ya tienes" className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50">
+          <ListPlus size={17} /> {addingBasics ? 'Añadiendo…' : 'Añadir productos básicos'}
+        </button>
+        <button onClick={openCreate} className="flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">
+          <PackagePlus size={17} /> Nuevo producto
+        </button>
+      </div>
     </div>
 
     <div className="grid grid-cols-2 gap-3">

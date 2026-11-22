@@ -6,6 +6,8 @@ import PurchaseAreaSection from './components/PurchaseAreaSection'
 import RecipesSection from './components/RecipesSection'
 import SettingsSection from './components/SettingsSection'
 import type { PantryNotice } from './lib/pantry-notice'
+import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from './lib/leave-guard'
+import { UnsavedChangesDialog } from './components/UnsavedChangesDialog'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes'
 
@@ -22,10 +24,19 @@ function App() {
   // Aviso para la despensa tras importar un ticket; se quita al cambiar de sección.
   const [pantryNotice, setPantryNotice] = useState<PantryNotice | null>(null)
 
-  function setSection(next: Section) {
+  // Sección a la que se quiere ir mientras se pregunta por cambios sin guardar.
+  const [pendingLeave, setPendingLeave] = useState<{ section: Section; guard: LeaveGuard } | null>(null)
+
+  function goToSection(next: Section) {
     setPantryNotice(null)
     setSectionState(next)
     window.scrollTo({ top: 0 })
+  }
+
+  function setSection(next: Section) {
+    const guard = getLeaveGuard()
+    if (guard && next !== section) { setPendingLeave({ section: next, guard }); return }
+    goToSection(next)
   }
 
   function showImportedInPantry(notice: PantryNotice) {
@@ -37,6 +48,7 @@ function App() {
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-neutral-900">
       {/* En el móvil la navegación va arriba: abajo la recortaban la barra de gestos y las esquinas de la pantalla. */}
+      {pendingLeave && <UnsavedChangesDialog guard={pendingLeave.guard} onStay={() => setPendingLeave(null)} onLeave={() => { setLeaveGuard(null); const next = pendingLeave.section; setPendingLeave(null); goToSection(next) }} />}
       <nav className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 px-1 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] backdrop-blur lg:hidden">
         <div className="mx-auto grid max-w-md grid-cols-5 gap-0.5">
           {sections.map(({ id, label, icon: Icon }) => { const active = section === id; return <button key={id} onClick={() => setSection(id)} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 text-[10.5px] font-medium tracking-tight ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
