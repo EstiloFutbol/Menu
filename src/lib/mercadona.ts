@@ -36,6 +36,13 @@ function parsePricelessItem(row: string): ParsedReceiptLine | null {
 
 // "16 HUEVOS CAMPEROS 1,95" es "1 6 HUEVOS CAMPEROS" sin el espacio: si hubiera
 // 16 unidades, el ticket llevaría también el precio por unidad.
+// La cantidad leída dos veces queda pegada delante del nombre («1 1 CEBO TAPAS»,
+// «| QUESO UNTAR LIGHT»). Mercadona no empieza ningún nombre por «1 » y una palabra.
+function stripRepeatedQuantity(item: ParsedReceiptLine): ParsedReceiptLine {
+  const rawName = item.rawName.replace(/^(?:[1Il|!] )+(?=\p{L}{2})/u, '')
+  return rawName === item.rawName ? item : { ...item, rawName }
+}
+
 function fixGluedQuantity(item: ParsedReceiptLine, row: string): ParsedReceiptLine {
   const glued = row.match(/^[^\p{L}\d]{0,4}1(\d{1,2}) /u)
   if (!glued || item.packages !== Number(`1${glued[1]}`) || (row.match(/\d{1,4},\d{2}/g) ?? []).length > 1) return item
@@ -102,13 +109,13 @@ export function parseMercadonaReceipt(text: string): ParsedStoreReceipt {
     }
     const item = parseQuantityFirstItem(row) ?? parseNoisyQuantityItem(row)
     if (item) {
-      lines.push(fixGluedQuantity(item, row))
+      lines.push(stripRepeatedQuantity(fixGluedQuantity(item, row)))
       continue
     }
     // Sin importe legible se apunta igual: lo completa otra lectura de la foto o, si
     // no, la persona (la app avisa de cuánto falta para llegar al total).
     const named = parsePricelessItem(row)
-    if (named) lines.push(fixGluedQuantity(named, row))
+    if (named) lines.push(stripRepeatedQuantity(fixGluedQuantity(named, row)))
   }
 
   return {

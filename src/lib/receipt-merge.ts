@@ -26,9 +26,11 @@ const cents = (value: number) => Math.round(value * 100)
 
 // Combina varias lecturas del mismo ticket (una por cada versión de la imagen).
 // Se parte de la lectura con más precios y, para cada producto, se reúnen los
-// precios que han dado las demás. Si falta el precio, se toma el de otra lectura;
-// si la suma no cuadra con el total del ticket, se prueba con los precios
-// alternativos hasta dar con una combinación que sí cuadre.
+// precios que han dado las demás con cuántas lecturas los dan (votos). Se queda
+// el precio más votado. Si la suma no cuadra con el total del ticket, el total
+// solo sirve para desempatar: se prueba entre los precios empatados en votos,
+// nunca se impone uno que dan menos lecturas (un precio mal leído en dos líneas
+// puede compensarse con otro y cuadrar por casualidad).
 export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: number | null): ParsedReceiptLine[] {
   const usable = readings.filter((reading) => reading.length)
   if (!usable.length) return []
@@ -36,7 +38,13 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
   const base = [...usable].sort((a, b) => pricedCount(b) - pricedCount(a) || b.length - a.length)[0]
   const others = usable.filter((reading) => reading !== base)
 
+  // Precios posibles de cada línea (en orden de aparición) y cuántas lecturas dan cada uno.
   const candidates: number[][] = base.map((line) => (line.totalPrice != null ? [line.totalPrice] : []))
+  const votes: Map<number, number>[] = base.map((line) => new Map(line.totalPrice != null ? [[cents(line.totalPrice), 1]] : []))
+  const vote = (index: number, price: number) => {
+    if (!candidates[index].some((existing) => cents(existing) === cents(price))) candidates[index].push(price)
+    votes[index].set(cents(price), (votes[index].get(cents(price)) ?? 0) + 1)
+  }
   const merged = base.map((line) => ({ ...line }))
 
   for (const other of others) {
@@ -56,9 +64,7 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
       used.add(best)
       placed.set(best, index)
       const match = other[best]
-      if (match.totalPrice != null && !candidates[index].some((price) => cents(price) === cents(match.totalPrice!))) {
-        candidates[index].push(match.totalPrice)
-      }
+      if (match.totalPrice != null) vote(index, match.totalPrice)
       if (merged[index].weightKg == null && match.weightKg != null) merged[index].weightKg = match.weightKg
       if (merged[index].packages == null && match.packages != null) merged[index].packages = match.packages
     })
@@ -76,12 +82,16 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
       }
       merged.splice(anchor + 1, 0, { ...line })
       candidates.splice(anchor + 1, 0, [line.totalPrice!])
+      votes.splice(anchor + 1, 0, new Map([[cents(line.totalPrice!), 1]]))
       placed.forEach((position, key) => { if (position > anchor) placed.set(key, position + 1) })
     }
   }
 
+  // El precio más votado; a igualdad, el que se leyó primero (el de la lectura base).
+  const topVotes = (index: number) => Math.max(0, ...votes[index].values())
+  const tied = (index: number) => candidates[index].filter((price) => votes[index].get(cents(price)) === topVotes(index))
   merged.forEach((line, index) => {
-    if (line.totalPrice == null && candidates[index].length) line.totalPrice = candidates[index][0]
+    if (candidates[index].length) line.totalPrice = tied(index)[0]
   })
 
   if (total == null) return merged
@@ -89,9 +99,9 @@ export function mergeReceiptReadings(readings: ParsedReceiptLine[][], total: num
   const target = cents(total)
   if (sum() === target) return merged
 
-  // Productos con más de un precio posible: se prueban las combinaciones (como
-  // mucho 12 productos, 4096 combinaciones) y se usa la primera que cuadre.
-  const doubtful = candidates.map((options, index) => ({ index, options })).filter((item) => item.options.length > 1).slice(0, 12)
+  // Productos con varios precios empatados en votos: se prueban las combinaciones
+  // (como mucho 12 productos, 4096 combinaciones) y se usa la primera que cuadre.
+  const doubtful = candidates.map((_, index) => ({ index, options: tied(index) })).filter((item) => item.options.length > 1).slice(0, 12)
   if (!doubtful.length) return merged
   const fixed = sum() - doubtful.reduce((acc, item) => acc + cents(merged[item.index].totalPrice ?? 0), 0)
 
