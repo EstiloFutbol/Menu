@@ -18,13 +18,21 @@ Aplicación personal para planificar el menú semanal, gestionar recetas, la com
 - Las imágenes de tickets no se almacenan nunca: solo se usan durante el OCR.
 - Lógica de dominio en `src/lib/` con tests en Vitest (fixtures OCR en `__fixtures__/`).
 
+## Versiones
+- Cada PR que cambie la app sube la versión con `npm version <x.y.z> --no-git-tag-version` (actualiza `package.json` y `package-lock.json`):
+  - arreglos o retoques pequeños → último número (0.4.0 → 0.4.1);
+  - funciones nuevas → número del medio (0.4.1 → 0.5.0).
+- Y añade arriba en `CHANGELOG.md` una entrada `## x.y.z — AAAA-MM-DD` con los cambios en lenguaje sencillo, pensados para quien usa la app. Se muestran en Ajustes → Cuenta → Sobre la app.
+- Un test comprueba que la versión de `package.json` tiene su entrada en `CHANGELOG.md`.
+- Si dos PR abiertas suben la misma versión, la que se mergee después debe subirla otra vez antes de mergear.
+
 ## Normas para los bots
 
 Estas normas aplican a los empleados bot del centro de mando (GitHub Actions con Claude).
 
 ### Desarrollador (issue con etiqueta `bot:desarrollar` o comentario `@claude`)
 1. Si la tarea es ambigua o demasiado grande, no programes: comenta tus dudas o una propuesta de división en tareas y pide la etiqueta `bot:bloqueado`.
-2. Haz el cambio mínimo. Sin refactors no pedidos. No toques secretos, `.env*`, `.github/workflows/` ni migraciones de base de datos salvo que la issue lo pida explícitamente.
+2. Haz el cambio mínimo. Sin refactors no pedidos. Sube la versión y apunta el cambio en `CHANGELOG.md` (ver "Versiones"). No toques secretos, `.env*`, `.github/workflows/` ni migraciones de base de datos salvo que la issue lo pida explícitamente.
 3. Ejecuta las comprobaciones de la sección "Comandos" y asegúrate de que pasan.
 4. Trabaja solo en tu rama `bot/...`. Nunca hagas push a `main` ni merges.
 5. Al terminar, resume en la issue qué has hecho, cómo probarlo y los riesgos, en español.

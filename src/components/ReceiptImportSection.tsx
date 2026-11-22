@@ -548,7 +548,7 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
       <button onClick={addManualLine} className="flex w-full items-center gap-2 border-t border-neutral-100 px-4 py-3 text-sm font-medium text-neutral-600 hover:bg-neutral-50"><Plus size={17} /> Añadir línea</button>
     </section>
 
-    <div className="sticky bottom-[5.5rem] z-10 flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-xl backdrop-blur lg:bottom-4 lg:rounded-3xl lg:p-4">
+    <div className="sticky bottom-[calc(1rem+env(safe-area-inset-bottom))] z-10 flex items-center justify-between gap-3 rounded-2xl border border-neutral-200 bg-white/95 px-3 py-2 shadow-xl backdrop-blur lg:bottom-4 lg:rounded-3xl lg:p-4">
       <div className="min-w-0 text-xs text-neutral-500">
         <p className="text-sm font-semibold text-neutral-900">{selectedLines.length} productos · {money(detectedTotal)}</p>
         {totalMismatch != null

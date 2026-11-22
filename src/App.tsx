@@ -25,6 +25,7 @@ function App() {
   function setSection(next: Section) {
     setPantryNotice(null)
     setSectionState(next)
+    window.scrollTo({ top: 0 })
   }
 
   function showImportedInPantry(notice: PantryNotice) {
@@ -35,6 +36,12 @@ function App() {
 
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-neutral-900">
+      {/* En el móvil la navegación va arriba: abajo la recortaban la barra de gestos y las esquinas de la pantalla. */}
+      <nav className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 px-2 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] backdrop-blur lg:hidden">
+        <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
+          {sections.map(({ id, label, icon: Icon }) => { const active = section === id; return <button key={id} onClick={() => setSection(id)} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 text-[11px] font-medium ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
+        </div>
+      </nav>
       <div className="flex min-h-screen">
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 overflow-y-auto border-r border-neutral-200 px-5 py-7 lg:block">
           <div className="px-2">
@@ -49,7 +56,7 @@ function App() {
           </nav>
         </aside>
         {/* Ocupa todo el ancho disponible; solo en pantallas muy anchas se limita para que no se estire de más. */}
-        <main className="min-w-0 flex-1 px-4 pb-28 pt-6 sm:px-6 lg:px-10 lg:pb-10 lg:pt-9">
+        <main className="min-w-0 flex-1 px-4 pb-10 pt-5 sm:px-6 lg:px-10 lg:pt-9">
           <div className="mx-auto w-full max-w-[1800px]">
             {section === 'menu' && <MenuSection />}
             {section === 'recetas' && <RecipesSection />}
@@ -59,11 +66,6 @@ function App() {
           </div>
         </main>
       </div>
-      <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-neutral-200 bg-white/95 px-2 py-2 backdrop-blur lg:hidden">
-        <div className="mx-auto grid max-w-md grid-cols-5 gap-1">
-          {sections.map(({ id, label, icon: Icon }) => { const active = section === id; return <button key={id} onClick={() => setSection(id)} className={`flex min-w-0 flex-col items-center gap-1 rounded-2xl px-1 py-2 text-[11px] font-medium ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
-        </div>
-      </nav>
     </div>
   )
 }
