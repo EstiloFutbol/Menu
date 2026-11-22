@@ -188,6 +188,8 @@ La migración `20261012000500_security_hardening.sql` refuerza el aislamiento en
 
 La migración `20261119000100_user_settings.sql` añade `user_settings`, con las preferencias de planificación de cada usuario (raciones por defecto, día de inicio de semana y franjas visibles) protegidas por RLS. Hay que aplicarla en Supabase; sin ella la app usa los valores por defecto.
 
+La migración `20261122000100_merge_ingredients.sql` añade `merge_ingredients`, que fusiona un producto del catálogo con otro en una sola transacción: recetas (sumando cantidades si la receta ya tenía el destino con la misma unidad), menú, lista de la compra, compras, consumos, despensa (sumando con conversión g↔kg y ml↔l) y traducciones de tickets pasan al destino, se crea una traducción con el nombre del origen y el origen se borra. Si algo no se puede sumar, no cambia nada. Hay que aplicarla en Supabase.
+
 ## Desarrollo local
 
 ```bash

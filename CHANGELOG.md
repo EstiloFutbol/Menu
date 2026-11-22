@@ -6,6 +6,12 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Arreglos o retoques pequeños: sube el último número (0.4.0 → 0.4.1).
 - Funciones nuevas: sube el número del medio (0.4.1 → 0.5.0).
 
+## 0.5.0 — 2026-11-22
+
+- Productos: nuevo botón «Fusionar» en Despensa → Productos para juntar un producto duplicado con otro (p. ej. «Lomo salmón noruego» con «Salmón»). Sus recetas, menú, lista de la compra, compras, despensa y traducciones de tickets pasan al producto elegido, y los próximos tickets con ese nombre irán directamente a él.
+- Productos: si intentas borrar un producto que ya tiene compras o recetas, la app explica por qué no se puede y te ofrece fusionarlo.
+- Móvil: los nombres de la barra de navegación ya no se salen del botón marcado.
+
 ## 0.4.0 — 2026-11-22
 
 Recoge todo lo publicado desde la 0.3.0. Hasta esta versión, el número no

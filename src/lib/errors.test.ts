@@ -23,3 +23,11 @@ describe('friendlyError', () => {
     expect(friendlyError(null, 'Fallback')).toBe('Fallback')
   })
 })
+
+describe('errores al fusionar productos', () => {
+  it('explica por qué no se puede borrar y los choques de unidades', () => {
+    expect(friendlyError({ message: 'Este producto ya tiene uso en recetas, menú, compras o consumos. No se puede eliminar sin perder histórico.', code: 'P0001' }, 'x')).toMatch(/fusionarlo/)
+    expect(friendlyError({ message: 'Merge conflict in pantry: 6.00 unidad and 300.00 g', code: 'P0001' }, 'x')).toBe('En la despensa tienes uno en unidad y el otro en g, y no se pueden sumar. Ajusta uno de los dos en Despensa y vuelve a intentarlo.')
+    expect(friendlyError({ message: 'Merge conflict in menu', code: 'P0001' }, 'x')).toMatch(/misma franja del menú/)
+  })
+})
