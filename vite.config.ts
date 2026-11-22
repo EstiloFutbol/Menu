@@ -34,10 +34,16 @@ function contentSecurityPolicy(supabaseUrl: string | undefined): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', 'VITE_')
+  // Commit del que sale la versión publicada (GitHub Actions lo da en GITHUB_SHA; en local no hay).
+  const commit = (loadEnv(mode, '.', 'GITHUB_SHA').GITHUB_SHA ?? '').slice(0, 7)
 
   return {
     base: '/Menu/',
-    define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+    define: {
+      __APP_VERSION__: JSON.stringify(pkg.version),
+      __APP_BUILD_DATE__: JSON.stringify(new Date().toISOString()),
+      __APP_COMMIT__: JSON.stringify(commit),
+    },
     plugins: [
       react(),
       tailwindcss(),

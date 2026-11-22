@@ -7,6 +7,12 @@ import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, 
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
 import ReceiptAliasesCard from './ReceiptAliasesCard'
+import changelogText from '../../CHANGELOG.md?raw'
+import { formatChangelogDate, parseChangelog } from '../lib/changelog'
+
+const changelog = parseChangelog(changelogText)
+const buildDate = new Date(__APP_BUILD_DATE__)
+const builtAt = Number.isNaN(buildDate.getTime()) ? '' : buildDate.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
 type Tab = 'cuenta' | 'preferencias'
 type Notice = { kind: 'ok' | 'error'; text: string } | null
@@ -180,9 +186,20 @@ function AccountTab() {
 
       <section className={card}>
         <h2 className="text-base font-semibold">Sobre la app</h2>
-        <p className="mt-2 text-sm text-neutral-500">Versión <span className="font-medium text-neutral-900">{__APP_VERSION__}</span></p>
+        <p className="mt-2 text-sm text-neutral-500">Versión <span className="font-medium text-neutral-900">{__APP_VERSION__}</span>{builtAt && <> · publicada el {builtAt}</>}{__APP_COMMIT__ && <span className="text-neutral-400"> ({__APP_COMMIT__})</span>}</p>
         <button type="button" onClick={checkUpdates} disabled={updating} className={`${buttonClass} mt-4`}>{updating ? 'Buscando…' : 'Buscar actualizaciones'}</button>
         <NoticeText notice={updateNotice} />
+        {changelog.length > 0 && <div className="mt-5 border-t border-neutral-100 pt-4">
+          <h3 className="text-sm font-semibold text-neutral-900">Novedades de la {changelog[0].version}{changelog[0].date && <span className="font-normal text-neutral-400"> · {formatChangelogDate(changelog[0].date)}</span>}</h3>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-600">{changelog[0].changes.map((change) => <li key={change}>{change}</li>)}</ul>
+          {changelog.length > 1 && <details className="mt-3 text-sm">
+            <summary className="cursor-pointer font-medium text-neutral-500">Versiones anteriores</summary>
+            {changelog.slice(1).map((entry) => <div key={entry.version} className="mt-3">
+              <p className="font-medium text-neutral-800">{entry.version}{entry.date && <span className="font-normal text-neutral-400"> · {formatChangelogDate(entry.date)}</span>}</p>
+              <ul className="mt-1 list-disc space-y-1 pl-5 text-neutral-600">{entry.changes.map((change) => <li key={change}>{change}</li>)}</ul>
+            </div>)}
+          </details>}
+        </div>}
       </section>
     </div>
   )
