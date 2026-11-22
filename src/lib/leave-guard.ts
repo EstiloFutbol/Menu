@@ -6,6 +6,8 @@ export type LeaveGuard = {
   what: string
   // Guarda los cambios; devuelve false si no se ha podido (p. ej. falta un dato).
   save?: () => Promise<boolean>
+  // Texto del botón de guardar (por defecto «Guardar y salir»).
+  saveLabel?: string
 }
 
 let current: LeaveGuard | null = null
