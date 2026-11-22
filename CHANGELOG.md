@@ -6,6 +6,10 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.4 — 2026-11-25
+
+- Menú: nuevo botón «Copiar semana» para copiar toda la planificación de la semana que estás viendo a otra (por defecto, la siguiente). Si la otra semana ya tiene cosas, eliges entre añadir a lo que hay o sustituir lo pendiente (lo ya consumido se conserva). Todo se copia como pendiente.
+
 ## 0.5.3 — 2026-11-24
 
 - Tickets: si sales de la revisión de un ticket a medias (cambiando de sección, de pestaña en Compra, pulsando «Otro ticket» o cerrando la página), la app pregunta si quieres añadirlo a la despensa, salir sin guardar o seguir revisando.

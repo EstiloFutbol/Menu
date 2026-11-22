@@ -2,6 +2,7 @@ import { AlertTriangle, CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, Cl
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { addDays, aggregateNeeds, compareNeedWithPantry, convertCompatibleQuantity, formatBaseQuantity, formatQuantity, formatWeekRange, localDateString, pendingPlannedLines, shouldShowPantryItem, startOfWeek, weekdayIndex, weekdayNames, type WeekStart } from '../lib/domain'
 import { describeUndo, type UndoResult } from '../lib/consumption'
+import { describeWeekCopy, type WeekCopyResult } from '../lib/week-copy'
 import { friendlyError } from '../lib/errors'
 import { guessCategory } from '../lib/recipe-import'
 import { normalizeReceiptName } from '../lib/receipt'
@@ -97,12 +98,25 @@ export default function MenuSection() {
   const [completionTarget, setCompletionTarget] = useState<CompletionTarget | null>(null)
   const [copyTarget, setCopyTarget] = useState<CopyTarget | null>(null)
   const [notice, setNotice] = useState('')
+  // Copiar la semana que se está viendo a otra semana.
+  const [weekCopy, setWeekCopy] = useState<{ target: Date; replace: boolean; targetSlots: number | null } | null>(null)
+  const [weekCopyMessage, setWeekCopyMessage] = useState('')
   // Resultado de deshacer un consumo (lo devuelto a la despensa).
   const [undoMessage, setUndoMessage] = useState('')
   const [undoingLogId, setUndoingLogId] = useState<string | null>(null)
   const [showSummary, setShowSummary] = useState(false)
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => { const date = addDays(weekStart, index); return { date: localDateString(date), label: dayLabels[index] } }), [weekStart, dayLabels])
+  // Lo que hay planificado en la semana que se está viendo (para copiarla).
+  const weekPlan = useMemo(() => {
+    const planned = entries.filter((entry) => entry.is_eating_out || entry.menu_entry_recipes?.length || entry.menu_entry_products?.length)
+    return {
+      slots: planned.length,
+      recipes: planned.reduce((total, entry) => total + (entry.is_eating_out ? 0 : entry.menu_entry_recipes?.length ?? 0), 0),
+      products: planned.reduce((total, entry) => total + (entry.is_eating_out ? 0 : entry.menu_entry_products?.length ?? 0), 0),
+      eatingOut: planned.filter((entry) => entry.is_eating_out).length,
+    }
+  }, [entries])
   const entriesBySlot = useMemo(() => { const map = new Map<string, MenuEntry>(); entries.forEach((entry) => map.set(slotKey(entry.planned_date, entry.meal), entry)); return map }, [entries])
   const pantryByIngredient = useMemo(() => new Map(pantry.map((row) => [row.ingredient_id, row])), [pantry])
   // Resumen semanal: lo pendiente del menú comparado con la despensa, con el mismo cálculo que la lista de la compra.
@@ -212,6 +226,39 @@ export default function MenuSection() {
       setNotice(skippedNotice(data as AddToSlotsResult))
       setCopyTarget(null); await loadWeek()
     } catch (cause) { setError(friendlyError(cause, 'No se pudo copiar la franja.')) } finally { setSaving(false) }
+  }
+
+  // Cuántas franjas con algo planificado tiene la semana de destino.
+  const weekCopyTargetKey = weekCopy ? localDateString(weekCopy.target) : ''
+  useEffect(() => {
+    if (!supabase || !weekCopyTargetKey) return
+    let cancelled = false
+    const target = parseLocalDate(weekCopyTargetKey)
+    void supabase.from('menu_entries').select('id,is_eating_out,menu_entry_recipes(id),menu_entry_products(id)')
+      .gte('planned_date', weekCopyTargetKey).lte('planned_date', localDateString(addDays(target, 6)))
+      .then(({ data }) => {
+        if (cancelled) return
+        const rows = (data ?? []) as Array<{ is_eating_out: boolean; menu_entry_recipes: unknown[] | null; menu_entry_products: unknown[] | null }>
+        const count = rows.filter((row) => row.is_eating_out || row.menu_entry_recipes?.length || row.menu_entry_products?.length).length
+        setWeekCopy((current) => current && localDateString(current.target) === weekCopyTargetKey ? { ...current, targetSlots: count } : current)
+      })
+    return () => { cancelled = true }
+  }, [weekCopyTargetKey])
+
+  const copyWeek = async () => {
+    if (!supabase || !weekCopy) return
+    setSaving(true); setError(''); setWeekCopyMessage('')
+    try {
+      const { data, error: copyError } = await supabase.rpc('copy_menu_week', { p_from_week: localDateString(weekStart), p_to_week: localDateString(weekCopy.target), p_replace: weekCopy.replace && (weekCopy.targetSlots ?? 0) > 0 })
+      if (copyError) {
+        if (/copy_menu_week/.test(copyError.message ?? '') && /function|schema cache/i.test(copyError.message ?? '')) throw new Error('Falta aplicar en Supabase la migración 20261125000100_copy_menu_week.sql.')
+        throw copyError
+      }
+      setWeekCopyMessage(describeWeekCopy(data as WeekCopyResult, `la semana del ${formatWeekRange(weekCopy.target)}`, (date, meal) => `${mealLabel(meal as MealType).toLowerCase()} del ${formatShortDate(date)}`))
+      // Se pasa a la semana copiada para verla.
+      setWeekStart(weekCopy.target)
+      setWeekCopy(null)
+    } catch (cause) { setError(friendlyError(cause, 'No se pudo copiar la semana.')) } finally { setSaving(false) }
   }
 
   // Quita lo pendiente de la franja. Si no hay nada consumido, la franja desaparece.
@@ -324,7 +371,7 @@ export default function MenuSection() {
   }
 
   return <div className="space-y-5">
-    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-medium text-neutral-500">Planificación semanal</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Tu menú</h1><p className="mt-2 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p></div><div className="flex gap-2"><button onClick={() => setWeekStart(addDays(weekStart, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana anterior"><ChevronLeft size={18} /></button><button onClick={() => { setWeekStart(startOfWeek(new Date(), weekStartsOn)); setMobileDay(weekdayIndex(new Date(), weekStartsOn)) }} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm">Esta semana</button><button onClick={() => setWeekStart(addDays(weekStart, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana siguiente"><ChevronRight size={18} /></button></div></header>
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-sm font-medium text-neutral-500">Planificación semanal</p><h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Tu menú</h1><p className="mt-2 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p></div><div className="flex flex-wrap gap-2"><button onClick={() => setWeekStart(addDays(weekStart, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana anterior"><ChevronLeft size={18} /></button><button onClick={() => { setWeekStart(startOfWeek(new Date(), weekStartsOn)); setMobileDay(weekdayIndex(new Date(), weekStartsOn)) }} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm">Esta semana</button><button onClick={() => setWeekStart(addDays(weekStart, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana siguiente"><ChevronRight size={18} /></button><button onClick={() => { setError(''); setWeekCopy({ target: addDays(weekStart, 7), replace: false, targetSlots: null }) }} disabled={!weekPlan.slots} title={weekPlan.slots ? 'Copiar esta semana a otra' : 'No hay nada planificado esta semana'} aria-label="Copiar semana" className="flex items-center gap-1.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm disabled:opacity-40"><Copy size={16} /> <span className="sm:hidden">Copiar</span><span className="hidden sm:inline">Copiar semana</span></button></div></header>
     {undoMessage && <div className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><span>{undoMessage}</span><button onClick={() => setUndoMessage('')} className="shrink-0 text-emerald-700" aria-label="Cerrar aviso"><X size={16} /></button></div>}
     {notice && <div className="flex items-start justify-between gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800"><span>{notice}</span><button onClick={() => setNotice('')} className="shrink-0 text-amber-700" aria-label="Cerrar aviso"><X size={16} /></button></div>}
     {!loading && weekSummary.length > 0 && <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
@@ -335,7 +382,21 @@ export default function MenuSection() {
         <p className="border-t border-neutral-100 px-4 py-2 text-[11px] text-neutral-400 sm:px-5">Solo cuenta lo que aún no has consumido. “Revisar” significa que la despensa no tiene una cantidad comparable.</p>
       </div>}
     </section>}
-    {error && !draft && !completionTarget && !copyTarget && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+    {weekCopyMessage && <div className="flex items-start justify-between gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800"><span>{weekCopyMessage}</span><button onClick={() => setWeekCopyMessage('')} className="shrink-0 text-emerald-700" aria-label="Cerrar aviso"><X size={16} /></button></div>}
+    {weekCopy && <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/30 p-0 sm:items-center sm:p-6" onMouseDown={(event) => event.target === event.currentTarget && !saving && setWeekCopy(null)}><div className="max-h-[92vh] w-full overflow-y-auto rounded-t-3xl bg-white p-5 shadow-2xl sm:max-w-md sm:rounded-3xl sm:p-6">
+      <div className="flex items-start justify-between gap-4"><div><p className="text-sm font-medium text-neutral-500">Copiar semana</p><h2 className="mt-1 text-2xl font-semibold tracking-tight text-neutral-950">{formatWeekRange(weekStart)}</h2></div><button disabled={saving} onClick={() => setWeekCopy(null)} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-400 hover:bg-neutral-100" aria-label="Cerrar"><X size={19} /></button></div>
+      <div className="mt-4 rounded-2xl bg-neutral-50 p-3 text-sm text-neutral-600">Se copiará{weekPlan.slots === 1 ? '' : 'n'} {weekPlan.slots} franja{weekPlan.slots === 1 ? '' : 's'}: {[weekPlan.recipes ? `${weekPlan.recipes} receta${weekPlan.recipes === 1 ? '' : 's'}` : '', weekPlan.products ? `${weekPlan.products} producto${weekPlan.products === 1 ? '' : 's'}` : '', weekPlan.eatingOut ? `${weekPlan.eatingOut} comida${weekPlan.eatingOut === 1 ? '' : 's'} fuera` : ''].filter(Boolean).join(', ')}. Cada una va al mismo día y comida de la otra semana, y todo queda pendiente aunque aquí ya esté consumido.</div>
+      <p className="mt-5 text-sm font-semibold text-neutral-900">A la semana</p>
+      <div className="mt-2 flex items-center justify-between gap-2 rounded-2xl border border-neutral-200 p-1.5"><button type="button" onClick={() => { const previous = addDays(weekCopy.target, -7); setWeekCopy({ ...weekCopy, target: localDateString(previous) === localDateString(weekStart) ? addDays(previous, -7) : previous, targetSlots: null }) }} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100" aria-label="Semana anterior"><ChevronLeft size={18} /></button><p className="text-sm font-medium text-neutral-800">{formatWeekRange(weekCopy.target)}{localDateString(weekCopy.target) === localDateString(addDays(weekStart, 7)) && <span className="font-normal text-neutral-400"> · la siguiente</span>}</p><button type="button" onClick={() => { const next = addDays(weekCopy.target, 7); setWeekCopy({ ...weekCopy, target: localDateString(next) === localDateString(weekStart) ? addDays(next, 7) : next, targetSlots: null }) }} className="grid h-9 w-9 place-items-center rounded-xl text-neutral-500 hover:bg-neutral-100" aria-label="Semana siguiente"><ChevronRight size={18} /></button></div>
+      <p className="mt-2 text-xs text-neutral-500">{weekCopy.targetSlots == null ? 'Comprobando esa semana…' : weekCopy.targetSlots ? `Esa semana ya tiene ${weekCopy.targetSlots} franja${weekCopy.targetSlots === 1 ? '' : 's'} planificada${weekCopy.targetSlots === 1 ? '' : 's'}.` : 'Esa semana está vacía.'}</p>
+      {(weekCopy.targetSlots ?? 0) > 0 && <div className="mt-3 space-y-2">
+        <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-sm ${!weekCopy.replace ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200'}`}><input type="radio" name="week-copy-mode" checked={!weekCopy.replace} onChange={() => setWeekCopy({ ...weekCopy, replace: false })} className="mt-0.5" /><span><span className="block font-medium text-neutral-900">Añadir a lo que ya hay</span><span className="text-xs text-neutral-500">Se mantiene lo planificado en esa semana y se añade lo copiado.</span></span></label>
+        <label className={`flex cursor-pointer items-start gap-3 rounded-2xl border p-3 text-sm ${weekCopy.replace ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200'}`}><input type="radio" name="week-copy-mode" checked={weekCopy.replace} onChange={() => setWeekCopy({ ...weekCopy, replace: true })} className="mt-0.5" /><span><span className="block font-medium text-neutral-900">Sustituir lo pendiente</span><span className="text-xs text-neutral-500">Se quita lo pendiente de esa semana antes de copiar. Lo ya consumido se conserva.</span></span></label>
+      </div>}
+      {error && <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+      <div className="mt-6 flex justify-end gap-2"><button disabled={saving} onClick={() => setWeekCopy(null)} className="rounded-2xl px-4 py-2.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50">Cancelar</button><button disabled={saving || weekCopy.targetSlots == null} onClick={() => void copyWeek()} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Copiando…' : 'Copiar semana'}</button></div>
+    </div></div>}
+    {error && !draft && !completionTarget && !copyTarget && !weekCopy && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {loading ? <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-sm text-neutral-500 shadow-sm">Cargando menú…</div> : <>
       <div className="lg:hidden">
         <div className="grid grid-cols-7 gap-1 rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-sm">{weekDays.map((day, index) => { const today = day.date === localDateString(new Date()); return <button key={day.date} onClick={() => setMobileDay(index)} className={`rounded-xl px-1 py-2 text-center ${mobileDay === index ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><span className="block text-[10px] font-medium">{day.label.slice(0, 2)}</span><span className="mt-0.5 block text-xs font-semibold">{parseLocalDate(day.date).getDate()}</span>{today && <span className={`mx-auto mt-1 block h-1 w-1 rounded-full ${mobileDay === index ? 'bg-white' : 'bg-neutral-900'}`} />}</button> })}</div>
