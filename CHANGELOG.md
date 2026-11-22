@@ -6,6 +6,10 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.3 — 2026-11-24
+
+- Tickets: si sales de la revisión de un ticket a medias (cambiando de sección, de pestaña en Compra, pulsando «Otro ticket» o cerrando la página), la app pregunta si quieres añadirlo a la despensa, salir sin guardar o seguir revisando.
+
 ## 0.5.2 — 2026-11-24
 
 - Menú: al añadir un producto a una franja ya no solo salen los de la despensa: después aparece el resto del catálogo (irá a la lista de la compra) y la opción «+ Crear producto nuevo…» para crearlo ahí mismo.

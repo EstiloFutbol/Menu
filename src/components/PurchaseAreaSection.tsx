@@ -4,11 +4,21 @@ import PurchaseHistorySection from './PurchaseHistorySection'
 import ReceiptImportSection from './ReceiptImportSection'
 import ShoppingSection from './ShoppingSection'
 import type { PantryNotice } from '../lib/pantry-notice'
+import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from '../lib/leave-guard'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 type View = 'lista' | 'ticket' | 'historial'
 
 export default function PurchaseAreaSection({ onReceiptImported }: { onReceiptImported?: (notice: PantryNotice) => void }) {
-  const [view, setView] = useState<View>('lista')
+  const [view, setViewState] = useState<View>('lista')
+  // Pestaña a la que se quiere ir mientras se pregunta por un ticket a medias.
+  const [pendingView, setPendingView] = useState<{ view: View; guard: LeaveGuard } | null>(null)
+
+  function setView(next: View) {
+    const guard = getLeaveGuard()
+    if (guard && next !== view) { setPendingView({ view: next, guard }); return }
+    setViewState(next)
+  }
 
   return (
     <div className="space-y-5">
@@ -40,6 +50,7 @@ export default function PurchaseAreaSection({ onReceiptImported }: { onReceiptIm
         </div>
       </header>
 
+      {pendingView && <UnsavedChangesDialog guard={pendingView.guard} onStay={() => setPendingView(null)} onLeave={() => { setLeaveGuard(null); setViewState(pendingView.view); setPendingView(null) }} />}
       {view === 'lista' && <ShoppingSection />}
       {view === 'ticket' && <ReceiptImportSection onImported={onReceiptImported} />}
       {view === 'historial' && <PurchaseHistorySection />}

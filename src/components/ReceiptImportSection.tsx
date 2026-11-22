@@ -10,6 +10,8 @@ import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 import type { PantryNotice } from '../lib/pantry-notice'
+import { setLeaveGuard } from '../lib/leave-guard'
+import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -73,6 +75,7 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
   // Texto que ha sacado el OCR o el PDF, para poder revisarlo o enviarlo si la lectura falla.
   const [readTexts, setReadTexts] = useState<string[]>([])
   const [copied, setCopied] = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
   // En el móvil cada producto se ve en una fila compacta y se despliega para editarlo.
   const isWide = useMediaQuery('(min-width: 1024px)')
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -326,23 +329,26 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
     return `Se sumará a ${current.quantity} ${current.unit ?? ''} existentes.`
   }
 
-  async function importReceipt() {
-    if (!supabase) return
+  // Guarda el ticket. Desde el aviso de salir (fromLeaveDialog) no lleva a la
+  // despensa: se va a donde se quería ir. Devuelve false si falta algo o falla.
+  async function importReceipt(fromLeaveDialog = false): Promise<boolean> {
+    if (!supabase) return false
     setError('')
     setSuccess('')
-    if (!storeName.trim()) { setError('Revisa el nombre de la tienda.'); return }
+    const invalid = (message: string) => { setError(message); return false }
+    if (!storeName.trim()) return invalid('Revisa el nombre de la tienda.')
     const parsedTotalAmount = parseDecimalInput(totalAmount)
-    if (parsedTotalAmount == null || parsedTotalAmount < 0) { setError('Revisa el total del ticket.'); return }
-    if (!selectedLines.length) { setError('Selecciona al menos un producto.'); return }
+    if (parsedTotalAmount == null || parsedTotalAmount < 0) return invalid('Revisa el total del ticket.')
+    if (!selectedLines.length) return invalid('Selecciona al menos un producto.')
 
     for (const line of selectedLines) {
-      if (!line.rawName.trim() || !line.translatedName.trim()) { setError('Todos los productos seleccionados necesitan concepto y traducción.'); return }
+      if (!line.rawName.trim() || !line.translatedName.trim()) return invalid('Todos los productos seleccionados necesitan concepto y traducción.')
       const parsedQuantity = parseDecimalInput(line.quantity)
       const parsedLinePrice = line.totalPrice ? parseDecimalInput(line.totalPrice) : 0
-      if (parsedQuantity == null || parsedQuantity <= 0) { setError(`Revisa la cantidad de ${line.translatedName || line.rawName}.`); return }
-      if (parsedLinePrice == null || parsedLinePrice < 0) { setError(`Revisa el precio de ${line.translatedName || line.rawName}.`); return }
+      if (parsedQuantity == null || parsedQuantity <= 0) return invalid(`Revisa la cantidad de ${line.translatedName || line.rawName}.`)
+      if (parsedLinePrice == null || parsedLinePrice < 0) return invalid(`Revisa el precio de ${line.translatedName || line.rawName}.`)
       const hint = pantryHint(line)
-      if (line.addToPantry && hint?.startsWith('Unidad incompatible')) { setError(`${line.translatedName}: ${hint}`); return }
+      if (line.addToPantry && hint?.startsWith('Unidad incompatible')) return invalid(`${line.translatedName}: ${hint}`)
     }
 
     setSaving(true)
@@ -366,22 +372,42 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
     })
     setSaving(false)
 
-    if (importError) { setError(friendlyError(importError, 'No se pudo importar el ticket.')); return }
+    if (importError) return invalid(friendlyError(importError, 'No se pudo importar el ticket.'))
     const pantryLines = selectedLines.filter((line) => line.addToPantry)
     const plural = (count: number) => `${count} producto${count === 1 ? '' : 's'}`
     // Se limpia la revisión para no importar el mismo ticket dos veces.
+    setLeaveGuard(null)
     reset()
     await loadReferenceData()
+    if (fromLeaveDialog) return true
     if (pantryLines.length && onImported) {
       // Se lleva a la despensa para comprobar que todo ha entrado bien.
       onImported({
         message: `Ticket de ${storeName.trim()} importado: ${plural(pantryLines.length)} añadido${pantryLines.length === 1 ? '' : 's'} a la despensa.`,
         names: pantryLines.map((line) => line.translatedName.trim()),
       })
-      return
+      return true
     }
     setSuccess(`Compra guardada en el historial (${plural(selectedLines.length)}). Ninguno se ha añadido a la despensa.`)
+    return true
   }
+
+  // Revisión a medias: se avisa al cambiar de sección o de pestaña, al empezar otro ticket y al cerrar la página.
+  const dirty = !saving && (sourceMode === 'ocr' ? lines.length > 0 : lines.some((line) => line.rawName.trim() || line.totalPrice.trim()) || Boolean(storeName.trim()))
+  const pantryCountForGuard = lines.filter((line) => line.include && line.addToPantry).length
+  const leaveGuard = {
+    what: storeName.trim() ? `el ticket de ${storeName.trim()}` : 'el ticket',
+    save: () => importReceipt(true),
+    saveLabel: pantryCountForGuard ? 'Añadir a despensa y salir' : 'Guardar compra y salir',
+  }
+  useEffect(() => {
+    if (!dirty) { setLeaveGuard(null); return }
+    setLeaveGuard(leaveGuard)
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  })
+  useEffect(() => () => setLeaveGuard(null), [])
 
   if (!lines.length && !reading) {
     return <div className="space-y-5">
@@ -462,8 +488,9 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
   return <div className="space-y-4 pb-2">
     <div className="flex items-start justify-between gap-3">
       <div className="min-w-0"><p className="text-sm font-medium text-neutral-500">{sourceMode === 'manual' ? 'Ticket manual' : 'Ticket leído'}</p><h2 className="mt-0.5 text-xl font-semibold sm:text-2xl">{sourceMode === 'manual' ? 'Crear ticket' : 'Revisar antes de importar'}</h2><p className="mt-1 hidden text-sm text-neutral-500 sm:block">{sourceMode === 'manual' ? 'Añade los productos uno a uno y revisa cantidades, unidades y precios antes de guardar.' : 'Corrige todo lo que necesites. Nada se guarda hasta confirmar.'}</p></div>
-      <button onClick={reset} className="flex shrink-0 items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-600"><RotateCcw size={16} /> Otro ticket</button>
+      <button onClick={() => { if (dirty) setConfirmReset(true); else reset() }} className="flex shrink-0 items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-600"><RotateCcw size={16} /> Otro ticket</button>
     </div>
+    {confirmReset && <UnsavedChangesDialog guard={leaveGuard} onStay={() => setConfirmReset(false)} onLeave={() => { setConfirmReset(false); setLeaveGuard(null); reset() }} />}
 
     {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
     {success && <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{success}</div>}

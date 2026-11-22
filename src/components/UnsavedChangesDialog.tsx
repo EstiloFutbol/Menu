@@ -20,7 +20,7 @@ export function UnsavedChangesDialog({ guard, onLeave, onStay }: { guard: LeaveG
       <h2 id="unsaved-title" className="text-lg font-semibold tracking-tight">¿Guardar los cambios?</h2>
       <p className="mt-2 text-sm text-neutral-600">Tienes cambios sin guardar en {guard.what}. Si sales sin guardar, se perderán.</p>
       <div className="mt-5 flex flex-col gap-2 sm:flex-row-reverse">
-        {guard.save && <button type="button" disabled={saving} onClick={() => void saveAndLeave()} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar y salir'}</button>}
+        {guard.save && <button type="button" disabled={saving} onClick={() => void saveAndLeave()} className="rounded-2xl bg-neutral-900 px-5 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Guardando…' : guard.saveLabel ?? 'Guardar y salir'}</button>}
         <button type="button" disabled={saving} onClick={onLeave} className="rounded-2xl border border-red-200 px-4 py-2.5 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50">Salir sin guardar</button>
         <button type="button" disabled={saving} onClick={onStay} className="rounded-2xl px-4 py-2.5 text-sm font-medium text-neutral-600 hover:bg-neutral-100 disabled:opacity-50 sm:mr-auto">Seguir editando</button>
       </div>
