@@ -6,6 +6,10 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.6 — 2026-11-25
+
+- Menú: «Añadir también en otras franjas» pasa a llamarse «Añadir en varias comidas o días», con textos más claros al elegir dónde repetir lo añadido.
+
 ## 0.5.5 — 2026-11-25
 
 - Tickets en foto: la app busca el ticket en la foto, lo recorta y lo endereza (también si está en perspectiva) antes de leerlo, así el texto se lee más grande y recto. Además lee una versión enfocada de la imagen.
