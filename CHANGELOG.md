@@ -6,6 +6,12 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.2 — 2026-11-23
+
+- Buscador con lupa al elegir recetas y productos en el menú: escribe y se filtra la lista, sin importar tildes ni mayúsculas («platano» encuentra «Plátano de Canarias»). Si no existe, «Crear producto» lo crea con ese nombre ya escrito.
+- Recetas: al añadir un ingrediente, la búsqueda también ignora tildes y muestra primero lo que empieza por lo escrito. Lo mismo al buscar una receta.
+- Las traducciones de los tickets pasan de Ajustes → Preferencias a Compra → Ticket. Aparecen plegadas en una sola línea; al abrirlas, cada traducción ocupa una fila, con buscador y lápiz para cambiar el producto.
+
 ## 0.6.1 — 2026-11-23
 
 - Modo sencillo: en Ajustes → Preferencias → «Modo de la app» eliges Completo o Sencillo. El modo es del hogar, así que todos lo ven igual. Se puede cambiar cuantas veces quieras sin perder nada.

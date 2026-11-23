@@ -6,7 +6,6 @@ import { NumberInput } from './NumberInput'
 import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, type ExportTables } from '../lib/export'
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
-import ReceiptAliasesCard from './ReceiptAliasesCard'
 import HouseholdSettings from './HouseholdSettings'
 import { useHouseholds } from '../lib/household'
 import { pendingInviteCode } from '../lib/invites'
@@ -256,7 +255,7 @@ function ModeCard() {
 
 function PreferencesTab() {
   const { settings, loadError } = useSettings()
-  const { current, version } = useHouseholds()
+  const { current } = useHouseholds()
   const [servings, setServings] = useState(String(settings.defaultServings))
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
   const [meals, setMeals] = useState<MealId[]>(settings.visibleMeals)
@@ -319,7 +318,6 @@ function PreferencesTab() {
       </form>
       <NoticeText notice={notice} />
     </section>
-    {settings.mode === 'completo' && <ReceiptAliasesCard key={version} />}
     </div>
   )
 }

@@ -12,6 +12,7 @@ import { NumberInput } from './NumberInput'
 import type { PantryNotice } from '../lib/pantry-notice'
 import { setLeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
+import ReceiptAliasesCard from './ReceiptAliasesCard'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -438,6 +439,7 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
           </div>
         </div>
       </section>
+      <ReceiptAliasesCard />
     </div>
   }
 
