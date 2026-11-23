@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { copySummary, currentHousehold, householdFromRow, memberFromRow } from './household'
+import { authorLabel, copySummary, currentHousehold, householdFromRow, memberFromRow, shortName } from './household'
 
 const row = (patch: Record<string, unknown> = {}) => ({ id: 'h1', name: 'Hogar de ana', is_personal: true, role: 'owner', member_count: 1, is_current: false, ...patch })
 
@@ -23,5 +23,17 @@ describe('hogares', () => {
     expect(copySummary({ recipes: 1, purchases: 0, products: 0 })).toBe('Se ha copiado a tu hogar: 1 receta.')
     expect(copySummary({})).toBe('No había recetas ni compras tuyas que copiar.')
     expect(copySummary(null)).toBe('No había recetas ni compras tuyas que copiar.')
+  })
+
+  it('dice quién hizo algo solo en hogares compartidos', () => {
+    const ana = memberFromRow({ user_id: 'a', email: 'ana@correo.es', role: 'owner', joined_at: '', is_me: true })
+    const beto = memberFromRow({ user_id: 'b', email: 'beto.lopez@correo.es', role: 'member', joined_at: '', is_me: false })
+    expect(shortName('beto.lopez@correo.es')).toBe('Beto.lopez')
+    expect(shortName(null)).toBe('Otra persona')
+    expect(authorLabel('a', [ana, beto])).toBe('por ti')
+    expect(authorLabel('b', [ana, beto])).toBe('por Beto.lopez')
+    expect(authorLabel('c', [ana, beto])).toBe('por alguien que ya no está en el hogar')
+    expect(authorLabel(null, [ana, beto])).toBeNull()
+    expect(authorLabel('a', [ana])).toBeNull()
   })
 })

@@ -478,4 +478,11 @@ begin
 end $$;
 select public._nothing_lost('modo sencillo');
 
-select 'OK: compartir el hogar y el modo sencillo no pierden nada' as resultado;
+-- 14. Cambios en vivo: las tablas compartidas están en la publicación de Realtime.
+do $$ begin
+  assert (select count(*) from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public'
+          and tablename in ('shopping_items', 'quick_list_items', 'menu_entries', 'menu_day_notes', 'pantry_items', 'consumption_logs', 'household_settings', 'household_members')) = 8,
+    'faltan tablas en la publicación de Realtime';
+end $$;
+
+select 'OK: compartir el hogar, el modo sencillo y los cambios en vivo no pierden nada' as resultado;

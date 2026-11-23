@@ -17,7 +17,7 @@ run_pg() { if [ "$(id -u)" = 0 ]; then chown -R postgres "$DIR"; su postgres -c 
 run_pg "$PG_BIN/initdb -D $DIR/data -A trust -U postgres >/dev/null && $PG_BIN/pg_ctl -D $DIR/data -o '-p $PORT -k $DIR' -l $DIR/log start >/dev/null"
 trap 'run_pg "$PG_BIN/pg_ctl -D $DIR/data stop >/dev/null"; rm -rf "$DIR"' EXIT
 sleep 1
-export PGOPTIONS="-c client_min_messages=warning"
+export PGOPTIONS="-c client_min_messages=error"
 PSQL=(psql -h "$DIR" -p "$PORT" -U postgres -v ON_ERROR_STOP=1 -q)
 "${PSQL[@]}" -c 'create database menu'
 "${PSQL[@]}" -c 'create database menu_vacia'

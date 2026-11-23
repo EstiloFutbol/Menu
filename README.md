@@ -228,6 +228,8 @@ La migración `20261127000100_simple_mode.sql` es la **fase 3: modo sencillo**.
 - `copy_day_notes(semana_origen, semana_destino)` copia los días con texto solo a los días vacíos de la otra semana.
 - Las dos tablas tienen `household_id` y RLS por hogar desde el principio. La migración no modifica ninguna fila existente: las cuentas siguen en modo completo.
 
+La migración `20261128000100_realtime.sql` es la **fase 4: cambios en vivo**. Añade las tablas compartidas a la publicación `supabase_realtime` (sin tocar datos y saltando las que ya estén). La app (`src/lib/realtime.ts`) escucha los cambios del hogar actual y recarga lo que se ve sin «Cargando…» (`refreshForRemoteChange` en `src/lib/refresh.ts`). No recarga si hay cambios sin guardar; si la app está en segundo plano, recarga al volver. Realtime respeta la seguridad: cada persona solo recibe cambios de filas de su hogar. En el plan gratuito de Supabase basta con aplicar la migración.
+
 ### Probar las migraciones
 
 `npm run test:db` levanta un PostgreSQL 16 temporal (necesita `initdb`, `pg_ctl` y `psql`; ruta configurable con `PG_BIN`) y hace lo siguiente:

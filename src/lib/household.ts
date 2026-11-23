@@ -1,4 +1,4 @@
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { friendlyError } from './errors'
 import { onAppReturn } from './refresh'
 import { loadSettings } from './settings'
@@ -147,4 +147,38 @@ export function useHouseholds() {
   const current = useSyncExternalStore(subscribe, () => state)
   useEffect(() => { void loadHouseholds() }, [])
   return { ...current, current: currentHousehold(current.households) }
+}
+
+// Nombre corto de una persona a partir de su correo: «ana.garcia@correo.es» → «Ana.garcia».
+export function shortName(email: string | null | undefined): string {
+  const local = (email ?? '').split('@')[0].trim()
+  return local ? local.charAt(0).toLocaleUpperCase('es') + local.slice(1) : 'Otra persona'
+}
+
+// «por ti», «por Ana», o nada si el hogar no es compartido o no se sabe quién fue.
+export function authorLabel(userId: string | null | undefined, members: HouseholdMember[]): string | null {
+  if (!userId || members.length < 2) return null
+  const member = members.find((candidate) => candidate.userId === userId)
+  if (!member) return 'por alguien que ya no está en el hogar'
+  return member.isMe ? 'por ti' : `por ${shortName(member.email)}`
+}
+
+let membersCache: { key: string; members: HouseholdMember[] } | null = null
+
+// Personas del hogar actual, para decir quién hizo cada cosa. Solo se piden si el hogar
+// es compartido; si estás solo no hace falta decir quién fue.
+export function useHouseholdMembers(): HouseholdMember[] {
+  const { current } = useHouseholds()
+  const key = current && current.memberCount > 1 ? `${current.id}:${current.memberCount}` : ''
+  const [members, setMembers] = useState<HouseholdMember[]>(() => (membersCache && membersCache.key === key ? membersCache.members : []))
+  useEffect(() => {
+    if (!key || !current) { setMembers([]); return }
+    if (membersCache?.key === key) { setMembers(membersCache.members); return }
+    let active = true
+    loadHouseholdMembers(current.id)
+      .then((list) => { membersCache = { key, members: list }; if (active) setMembers(list) })
+      .catch(() => { /* sin nombres: simplemente no se dice quién fue */ })
+    return () => { active = false }
+  }, [key]) // eslint-disable-line react-hooks/exhaustive-deps
+  return members
 }

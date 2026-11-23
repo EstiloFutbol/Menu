@@ -6,6 +6,15 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.3 — 2026-11-23
+
+- Cambios en vivo: lo que cambie otra persona del hogar (la lista, el menú, la despensa, las notas, los tickets…) aparece al momento en tu pantalla, sin recargar y sin «Cargando…». Si estás escribiendo algo sin guardar, no se te cambia nada debajo. Si tienes la app en segundo plano, se actualiza al volver.
+- Si alguien cambia el modo del hogar (sencillo o completo), los demás lo ven al momento.
+- En un hogar compartido se ve quién hizo cada cosa:
+  - en el menú, «consumido por Ana»;
+  - en el historial de compras, «subido por Ana»;
+  - en la lista sencilla, «apuntado por Ana» en lo que no apuntaste tú.
+
 ## 0.6.2 — 2026-11-23
 
 - Buscador con lupa al elegir recetas y productos en el menú: escribe y se filtra la lista, sin importar tildes ni mayúsculas («platano» encuentra «Plátano de Canarias»). Si no existe, «Crear producto» lo crea con ese nombre ya escrito.

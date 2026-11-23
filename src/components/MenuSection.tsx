@@ -11,8 +11,9 @@ import { supabase } from '../lib/supabase'
 import CompleteProductModal from './CompleteProductModal'
 import CompleteRecipeModal from './CompleteRecipeModal'
 import { NumberInput } from './NumberInput'
-import { useRefreshOnReturn } from '../lib/refresh'
+import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 import { DayNoteEditor } from './DayNoteEditor'
+import { authorLabel, useHouseholdMembers } from '../lib/household'
 import { SearchSelect, type SearchOption } from './SearchSelect'
 
 const mealTypes = [
@@ -31,7 +32,7 @@ type Recipe = { id: string; name: string; base_servings: number }
 type Ingredient = { id: string; name: string; category: string | null; default_unit: Unit | null }
 type PlannedRecipe = { id: string; recipe_id: string; servings: number; sort_order: number; recipe: { id: string; name: string; base_servings: number; recipe_ingredients: { ingredient_id: string; quantity: number; unit: Unit }[] } | null }
 type PlannedProduct = { id: string; ingredient_id: string; quantity: number; unit: Unit; sort_order: number; ingredient: Ingredient | null }
-type ConsumptionLog = { id: string; recipe_id: string | null; menu_entry_recipe_id: string | null; menu_entry_product_id: string | null; consumed_at: string }
+type ConsumptionLog = { id: string; recipe_id: string | null; menu_entry_recipe_id: string | null; menu_entry_product_id: string | null; consumed_at: string; user_id?: string | null }
 type MenuEntry = { id: string; planned_date: string; meal: MealType; is_eating_out: boolean; completed_at: string | null; menu_entry_recipes: PlannedRecipe[]; menu_entry_products: PlannedProduct[]; consumption_logs: ConsumptionLog[] }
 type SlotDraftRecipe = { rowId?: string; recipeId: string; servings: string; locked?: boolean }
 type SlotDraftProduct = { rowId?: string; ingredientId: string; quantity: string; unit: Unit; locked?: boolean }
@@ -106,6 +107,7 @@ export default function MenuSection() {
   const [undoingLogId, setUndoingLogId] = useState<string | null>(null)
   const [showSummary, setShowSummary] = useState(false)
   const [notes, setNotes] = useState<Record<string, string>>({})
+  const members = useHouseholdMembers()
   const noteFor = (date: string) => notes[date] !== undefined ? <DayNoteEditor key={date} day={date} serverText={notes[date]} label={`Nota del ${formatShortDate(date)}`} compact onSaved={(day, text) => setNotes((current) => ({ ...current, [day]: text }))} /> : null
 
   const weekDays = useMemo(() => Array.from({ length: 7 }, (_, index) => { const date = addDays(weekStart, index); return { date: localDateString(date), label: dayLabels[index] } }), [weekStart, dayLabels])
@@ -137,10 +139,10 @@ export default function MenuSection() {
   const loadPantry = useCallback(async () => { if (!supabase) return; const { data, error: queryError } = await supabase.from('pantry_items').select('ingredient_id,quantity,unit,status'); if (queryError) throw queryError; setPantry((data ?? []) as PantryRow[]) }, [])
   const loadWeek = useCallback(async () => {
     if (!supabase) return
-    setLoading(true); setError('')
+    if (!isQuietRefresh()) setLoading(true); setError('')
     try {
       const from = localDateString(weekStart); const to = localDateString(addDays(weekStart, 6))
-      const { data, error: queryError } = await supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out,completed_at,menu_entry_recipes(id,recipe_id,servings,sort_order,recipe:recipes(id,name,base_servings,recipe_ingredients(ingredient_id,quantity,unit))),menu_entry_products(id,ingredient_id,quantity,unit,sort_order,ingredient:ingredients(id,name,category,default_unit)),consumption_logs(id,recipe_id,menu_entry_recipe_id,menu_entry_product_id,consumed_at)').gte('planned_date', from).lte('planned_date', to).order('planned_date')
+      const { data, error: queryError } = await supabase.from('menu_entries').select('id,planned_date,meal,is_eating_out,completed_at,menu_entry_recipes(id,recipe_id,servings,sort_order,recipe:recipes(id,name,base_servings,recipe_ingredients(ingredient_id,quantity,unit))),menu_entry_products(id,ingredient_id,quantity,unit,sort_order,ingredient:ingredients(id,name,category,default_unit)),consumption_logs(id,recipe_id,menu_entry_recipe_id,menu_entry_product_id,consumed_at,user_id)').gte('planned_date', from).lte('planned_date', to).order('planned_date')
       if (queryError) throw queryError
       setEntries((data ?? []) as unknown as MenuEntry[])
       // Notas del modo sencillo: se muestran (y se pueden cambiar) para que no se oculte nada.
@@ -343,6 +345,8 @@ export default function MenuSection() {
 
   const consumptionLogFor = (entry: MenuEntry | undefined, rowId: string | undefined, kind: 'recipe' | 'product') =>
     rowId ? entry?.consumption_logs?.find((log) => (kind === 'recipe' ? log.menu_entry_recipe_id : log.menu_entry_product_id) === rowId) : undefined
+  // En un hogar compartido, quién lo consumió («por Ana»).
+  const consumedBy = (entry: MenuEntry | undefined, rowId: string, kind: 'recipe' | 'product') => authorLabel(consumptionLogFor(entry, rowId, kind)?.user_id, members)
 
   const undoButton = (logId: string | undefined, name: string, className: string, label: React.ReactNode = 'Deshacer') => logId
     ? <button type="button" disabled={undoingLogId === logId} onClick={(event) => { event.stopPropagation(); void undoConsumption(logId, name) }} className={className} title="Deshacer el consumo" aria-label={`Deshacer el consumo de ${name}`}>{label}</button>
@@ -361,7 +365,7 @@ export default function MenuSection() {
           event.stopPropagation()
           setCompletionTarget({ kind: 'recipe', plannedRecipeId: item.id, recipeId: item.recipe_id, recipeName: item.recipe?.name ?? 'Receta', servings: Number(item.servings) })
         }
-        return <div key={item.id} onClick={compact && !completed ? completeRecipe : undefined} className={`rounded-lg ${compact ? `-mx-1 px-1 py-0.5 ${completed ? '' : 'cursor-pointer transition hover:bg-neutral-100'}` : 'bg-neutral-50 px-2 py-1.5'}`}><div className="flex items-center gap-1"><p className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-700">{item.recipe?.name ?? 'Receta'}</p>{completed && <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />}</div>{!compact && <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[11px] text-neutral-400">{Number(item.servings).toLocaleString('es-ES')} r.</span>{!completed && <button onClick={completeRecipe} className="text-[11px] font-medium text-neutral-700 underline decoration-neutral-300 underline-offset-2">Completar</button>}{completed && undoButton(consumptionLogFor(entry, item.id, 'recipe')?.id, item.recipe?.name ?? 'Receta', 'text-[11px] font-medium text-neutral-500 underline decoration-neutral-300 underline-offset-2 disabled:opacity-40')}</div>}</div>
+        return <div key={item.id} onClick={compact && !completed ? completeRecipe : undefined} className={`rounded-lg ${compact ? `-mx-1 px-1 py-0.5 ${completed ? '' : 'cursor-pointer transition hover:bg-neutral-100'}` : 'bg-neutral-50 px-2 py-1.5'}`}><div className="flex items-center gap-1"><p className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-700">{item.recipe?.name ?? 'Receta'}</p>{completed && <span title={consumedBy(entry, item.id, 'recipe') ? `Consumido ${consumedBy(entry, item.id, 'recipe')}` : 'Consumido'}><CheckCircle2 size={12} className="shrink-0 text-emerald-600" /></span>}</div>{!compact && <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[11px] text-neutral-400">{Number(item.servings).toLocaleString('es-ES')} r.{completed && consumedBy(entry, item.id, 'recipe') ? ` · consumido ${consumedBy(entry, item.id, 'recipe')}` : ''}</span>{!completed && <button onClick={completeRecipe} className="text-[11px] font-medium text-neutral-700 underline decoration-neutral-300 underline-offset-2">Completar</button>}{completed && undoButton(consumptionLogFor(entry, item.id, 'recipe')?.id, item.recipe?.name ?? 'Receta', 'text-[11px] font-medium text-neutral-500 underline decoration-neutral-300 underline-offset-2 disabled:opacity-40')}</div>}</div>
       })}
       {products.map((item) => {
         const completed = entry?.consumption_logs?.some((log) => log.menu_entry_product_id === item.id) ?? false
@@ -369,7 +373,7 @@ export default function MenuSection() {
           event.stopPropagation()
           setCompletionTarget({ kind: 'product', entryId: entry!.id, productId: item.id, productName: item.ingredient?.name ?? 'Producto', quantity: Number(item.quantity), unit: item.unit })
         }
-        return <div key={item.id} onClick={compact && !completed ? completeProduct : undefined} className={`rounded-lg ${compact ? `-mx-1 px-1 py-0.5 ${completed ? '' : 'cursor-pointer transition hover:bg-neutral-100'}` : 'bg-neutral-50 px-2 py-1.5'}`}><div className="flex items-center gap-1"><p className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-700">{item.ingredient?.name ?? 'Producto'}</p>{completed && <CheckCircle2 size={12} className="shrink-0 text-emerald-600" />}</div>{!compact && <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[11px] text-neutral-400">{formatQuantity(Number(item.quantity))} {item.unit}</span>{!completed && <button onClick={completeProduct} className="text-[11px] font-medium text-neutral-700 underline decoration-neutral-300 underline-offset-2">Completar</button>}{completed && undoButton(consumptionLogFor(entry, item.id, 'product')?.id, item.ingredient?.name ?? 'Producto', 'text-[11px] font-medium text-neutral-500 underline decoration-neutral-300 underline-offset-2 disabled:opacity-40')}</div>}</div>
+        return <div key={item.id} onClick={compact && !completed ? completeProduct : undefined} className={`rounded-lg ${compact ? `-mx-1 px-1 py-0.5 ${completed ? '' : 'cursor-pointer transition hover:bg-neutral-100'}` : 'bg-neutral-50 px-2 py-1.5'}`}><div className="flex items-center gap-1"><p className="min-w-0 flex-1 truncate text-xs font-medium text-neutral-700">{item.ingredient?.name ?? 'Producto'}</p>{completed && <span title={consumedBy(entry, item.id, 'product') ? `Consumido ${consumedBy(entry, item.id, 'product')}` : 'Consumido'}><CheckCircle2 size={12} className="shrink-0 text-emerald-600" /></span>}</div>{!compact && <div className="mt-1 flex items-center justify-between gap-2"><span className="text-[11px] text-neutral-400">{formatQuantity(Number(item.quantity))} {item.unit}{completed && consumedBy(entry, item.id, 'product') ? ` · consumido ${consumedBy(entry, item.id, 'product')}` : ''}</span>{!completed && <button onClick={completeProduct} className="text-[11px] font-medium text-neutral-700 underline decoration-neutral-300 underline-offset-2">Completar</button>}{completed && undoButton(consumptionLogFor(entry, item.id, 'product')?.id, item.ingredient?.name ?? 'Producto', 'text-[11px] font-medium text-neutral-500 underline decoration-neutral-300 underline-offset-2 disabled:opacity-40')}</div>}</div>
       })}
     </div>
   }
