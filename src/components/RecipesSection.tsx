@@ -3,6 +3,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } fro
 import { friendlyError } from '../lib/errors'
 import { guessCategory, matchCatalogName, parseRecipeText } from '../lib/recipe-import'
 import { supabase } from '../lib/supabase'
+import { matchesSearch, rankBySearch } from '../lib/search'
 import { NumberInput } from './NumberInput'
 import { setLeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
@@ -115,11 +116,8 @@ function IngredientEditor({
   onRemove: () => void
 }) {
   const [showMatches, setShowMatches] = useState(false)
-  const matches = useMemo(() => {
-    const term = value.name.trim().toLocaleLowerCase('es')
-    if (!term) return ingredients.slice(0, 6)
-    return ingredients.filter((item) => item.name.toLocaleLowerCase('es').includes(term)).slice(0, 6)
-  }, [ingredients, value.name])
+  // Sin tener en cuenta tildes ni mayúsculas, y primero lo que empieza por lo escrito.
+  const matches = useMemo(() => rankBySearch(ingredients, value.name, (item) => item.name).slice(0, 8), [ingredients, value.name])
 
   const selectIngredient = (ingredient: Ingredient) => {
     onChange({
@@ -154,9 +152,10 @@ function IngredientEditor({
               })
               setShowMatches(true)
             }}
-            placeholder="Ej. Arroz basmati"
-            className="w-full rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-neutral-400"
+            placeholder="Buscar o escribir, p. ej. Arroz basmati"
+            className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none transition focus:border-neutral-400"
           />
+          <Search size={15} className="pointer-events-none absolute left-3 top-[2.45rem] text-neutral-400" />
           {showMatches && value.name.trim() && (
             <div className="absolute z-20 mt-1 max-h-52 w-full overflow-auto rounded-xl border border-neutral-200 bg-white p-1 shadow-lg">
               {matches.map((item) => (
@@ -298,7 +297,7 @@ export default function RecipesSection() {
   useEffect(() => { void loadData() }, [loadData])
   useRefreshOnReturn(loadData)
 
-  const filteredRecipes = recipes.filter((recipe) => recipe.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')))
+  const filteredRecipes = recipes.filter((recipe) => matchesSearch(recipe.name, search))
 
   const startCreate = () => {
     setEditingId(null)

@@ -1,3 +1,4 @@
+import { normalizeSearch } from './search'
 // Lógica pura para gestionar las traducciones recordadas de los tickets.
 
 export type ReceiptAlias = {
@@ -9,9 +10,8 @@ export type ReceiptAlias = {
 }
 
 // Minúsculas, sin tildes y con espacios simplificados, para buscar.
-export function normalizeSearch(value: string): string {
-  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim()
-}
+// Misma búsqueda que el resto de la app (sin tildes ni mayúsculas).
+export { normalizeSearch }
 
 // Texto del ticket a mostrar: el original o, si no hay, el normalizado.
 export function aliasConcept(alias: Pick<ReceiptAlias, 'raw_name' | 'normalized_name'>): string {
