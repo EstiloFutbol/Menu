@@ -38,6 +38,12 @@ const knownMessages: Record<string, string> = {
   'Cannot merge a product with itself': 'Elige un producto distinto para fusionar.',
   'Merge conflict in menu': 'Los dos productos están en la misma comida del menú con unidades que no se pueden sumar. Quita uno de esa comida y vuelve a intentarlo.',
   'Consumption not found': 'Ese consumo ya no existe. Recarga la página.',
+  'Invite limit reached': 'Ya tienes 5 invitaciones sin usar. Anula alguna o espera a que caduquen.',
+  'Invite not found': 'No se ha encontrado esa invitación o ya se ha usado.',
+  // Altas de cuenta: Supabase devuelve este texto cuando la base de datos rechaza el alta (código no válido).
+  'Database error saving new user': 'El código de invitación no es válido, ha caducado o ya se usó.',
+  'Signups not allowed for this instance': 'Ahora mismo no se pueden crear cuentas nuevas.',
+  'User already registered': 'Ya existe una cuenta con ese correo. Entra con tu contraseña.',
   'Slot has consumption': 'No puedes convertir en “Comida fuera” una comida que ya tiene algo consumido.',
 }
 

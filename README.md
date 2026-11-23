@@ -196,6 +196,13 @@ La migración `20261124000100_basic_ingredients.sql` añade el catálogo de prod
 
 La migración `20261125000100_copy_menu_week.sql` añade `copy_menu_week`, que copia en una sola transacción todas las franjas de una semana a otra (mismo día y comida), con sus recetas y productos como pendientes. Con `p_replace` quita antes lo pendiente de la semana de destino, conservando siempre lo consumido. «Comida fuera» solo se copia a franjas vacías, y las franjas de destino que son «Comida fuera» no reciben nada; ambos casos se devuelven en `skipped`. Hay que aplicarla en Supabase.
 
+La migración `20261125000200_app_invites.sql` añade las invitaciones a la app (`app_invites`).
+- Cada usuario crea códigos con `create_app_invite`: como mucho 5 activos, de un solo uso y con caducidad a los 7 días. Los anula con `revoke_app_invite`.
+- La pantalla de registro comprueba el código con `check_app_invite`, que solo devuelve si es válido.
+- **Toda cuenta nueva necesita un código válido.** El trigger `before_auth_user_created_require_invite` en `auth.users` rechaza el alta sin él y marca el código como usado en la misma operación.
+- Para que funcione hay que activar en Supabase *Authentication → Sign In / Providers → Allow new users to sign up*, siempre **después** de aplicar la migración.
+- Las cuentas creadas desde el panel de Supabase también necesitan código. Si hiciera falta crear una a mano, se desactiva el trigger un momento con `alter table auth.users disable trigger before_auth_user_created_require_invite;` y se vuelve a activar con `enable trigger`.
+
 ### Preparación de las fotos de tickets
 
 Antes del OCR, `src/lib/receipt-pixels.ts` prepara la foto. El mismo código lo usan la app y el banco de pruebas.
