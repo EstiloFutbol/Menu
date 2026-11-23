@@ -4,7 +4,9 @@
 #  1. Aplica las migraciones anteriores al hogar y crea datos de dos cuentas.
 #  2. Aplica la migración del hogar y comprueba que no se pierde nada, que cada
 #     hogar ve solo lo suyo y que todas las funciones siguen funcionando.
-#  3. En una base de datos vacía con todas las migraciones, prueba a compartir el
+#  3. Aplica la fase 2 (dos veces) y comprueba que las cuentas que ya existen no
+#     pierden ni cambian nada: mismas filas con el mismo contenido.
+#  4. En una base de datos vacía con todas las migraciones, prueba a compartir el
 #     hogar: invitar, unirse, cambiar, salir (con y sin copia) y quitar a alguien.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -29,8 +31,19 @@ for migration in supabase/migrations/*.sql; do
 done
 "${PSQL[@]}" -f supabase/tests/households-before.sql >/dev/null
 "${PSQL[@]}" -f "supabase/migrations/$HOGAR" >/dev/null 2>&1 || "${PSQL[@]}" -f "supabase/migrations/$HOGAR"
+FASE2=20261126000100_household_sharing.sql
 for migration in supabase/migrations/*.sql; do
-  [[ "$(basename "$migration")" > "$HOGAR" ]] && "${PSQL[@]}" -f "$migration" >/dev/null
+  name="$(basename "$migration")"
+  [[ "$name" > "$HOGAR" && "$name" < "$FASE2" ]] && "${PSQL[@]}" -f "$migration" >/dev/null
+done
+# Fase 2 sobre datos como los de producción: nada cambia. Se aplica dos veces por si
+# alguien la ejecuta de nuevo en Supabase.
+"${PSQL[@]}" -f supabase/tests/sharing-before.sql >/dev/null
+"${PSQL[@]}" -f "supabase/migrations/$FASE2" >/dev/null
+"${PSQL[@]}" -f "supabase/migrations/$FASE2" >/dev/null
+"${PSQL[@]}" -At -f supabase/tests/sharing-upgrade.sql 2>&1 | grep -v '^SET$\|^RESET$\|^DO$\|^DROP TABLE$'
+for migration in supabase/migrations/*.sql; do
+  [[ "$(basename "$migration")" > "$FASE2" ]] && "${PSQL[@]}" -f "$migration" >/dev/null
 done
 "${PSQL[@]}" -At -f supabase/tests/households-after.sql 2>&1 | grep -v '^SET$\|^RESET$\|^DO$\|^GRANT$'
 "${EMPTY[@]}" -f supabase/tests/stub-auth.sql

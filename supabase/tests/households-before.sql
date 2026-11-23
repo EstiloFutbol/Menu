@@ -34,6 +34,13 @@ select public.save_recipe(null, '{"name":"Tortilla","base_servings":2}',
 insert into public.pantry_items (user_id, ingredient_id, quantity, unit) select auth.uid(), id, 6, 'unidad' from public.ingredients where name = 'Huevos';
 reset role;
 
+-- Invitaciones como las que ya hay en producción: una sin usar y una usada.
+alter table auth.users disable trigger before_auth_user_created_require_invite;
+insert into public.app_invites (code, created_by, used_by, used_email, used_at) values
+  ('ANAAPP23', '00000000-0000-0000-0000-00000000000a', null, null, null),
+  ('ANAUSO23', '00000000-0000-0000-0000-00000000000a', '00000000-0000-0000-0000-00000000000b', 'beto@prueba.es', now());
+alter table auth.users enable trigger before_auth_user_created_require_invite;
+
 -- Recuento antes de migrar.
 create table public._before as
 select t.name, (xpath('/row/c/text()', query_to_xml(format('select count(*) as c from public.%I', t.name), false, true, '')))[1]::text::int as rows

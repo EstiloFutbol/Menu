@@ -225,9 +225,10 @@ La migración `20261126000100_household_sharing.sql` es la **fase 2 del modo hog
 
 `npm run test:db` levanta un PostgreSQL 16 temporal (necesita `initdb`, `pg_ctl` y `psql`; ruta configurable con `PG_BIN`) y hace lo siguiente:
 1. Aplica las migraciones anteriores al hogar y crea datos de dos cuentas con `supabase/tests/households-before.sql`.
-2. Aplica la migración del hogar y el resto.
-3. Ejecuta las comprobaciones de `supabase/tests/households-after.sql`: no se pierde ninguna fila, cada hogar ve solo lo suyo, todas las funciones siguen funcionando, hogar compartido, cuentas nuevas y borrado de cuentas.
-4. En otra base de datos vacía aplica todas las migraciones y ejecuta `supabase/tests/household-sharing.sql`: invitar, unirse, cambiar de hogar, salir con y sin copia, quitar a alguien, cuentas nuevas con invitación y que nada de eso baje el número de filas de ninguna tabla.
+2. Aplica la fase 1 del hogar y guarda una huella de todos los datos (`supabase/tests/sharing-before.sql`), como están hoy en producción.
+3. Aplica la fase 2 del hogar dos veces y ejecuta `supabase/tests/sharing-upgrade.sql`: las cuentas que ya existen conservan exactamente las mismas filas con el mismo contenido en todas las tablas, siguen en su hogar personal viendo sus datos y con sus preferencias, y sus invitaciones sin usar siguen valiendo.
+4. Aplica el resto y ejecuta `supabase/tests/households-after.sql`: no se pierde ninguna fila, cada hogar ve solo lo suyo, todas las funciones siguen funcionando, hogar compartido, cuentas nuevas y borrado de cuentas.
+5. En otra base de datos vacía aplica todas las migraciones y ejecuta `supabase/tests/household-sharing.sql`: invitar, unirse, cambiar de hogar, salir con y sin copia, quitar a alguien, cuentas nuevas con invitación y que nada de eso baje el número de filas de ninguna tabla.
 
 ### Preparación de las fotos de tickets
 

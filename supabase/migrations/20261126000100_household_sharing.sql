@@ -11,13 +11,16 @@
 -- * Las preferencias de planificación pasan a ser del hogar (household_settings),
 --   copiadas de las de cada cuenta. Las de user_settings se conservan sin tocar.
 
+-- Todo o nada: si algo fallara a mitad, no se aplica ningún cambio.
+begin;
+
 -- Invitaciones a un hogar ------------------------------------------------------
 
 alter table public.app_invites
   add column if not exists household_id uuid references public.households(id) on delete cascade;
 alter table public.app_invites drop constraint if exists app_invites_household_kind;
 alter table public.app_invites add constraint app_invites_household_kind
-  check ((kind = 'household') = (household_id is not null));
+  check ((kind = 'household') = (household_id is not null)) not valid; -- solo para las nuevas: las que ya hay no se tocan
 create index if not exists app_invites_household_idx on public.app_invites (household_id);
 
 -- Solo se puede invitar a un hogar del que se es responsable, también escribiendo
@@ -420,3 +423,5 @@ grant execute on function public.leave_household(uuid, boolean) to authenticated
 grant execute on function public.remove_household_member(uuid, uuid) to authenticated;
 grant execute on function public.rename_household(uuid, text) to authenticated;
 grant select, insert, update on public.household_settings to authenticated;
+
+commit;
