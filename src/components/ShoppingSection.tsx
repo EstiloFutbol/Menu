@@ -7,6 +7,7 @@ import { useSettings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 import { useRefreshOnReturn } from '../lib/refresh'
+import { QuickList } from './QuickList'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -509,6 +510,7 @@ function ShoppingSection() {
           ))}
         </div>
       )}
+      <QuickList editable={false} />
     </div>
   )
 }

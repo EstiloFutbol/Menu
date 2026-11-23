@@ -20,7 +20,7 @@ declare v_table text;
 begin
   foreach v_table in array array['households', 'ingredients', 'recipes', 'recipe_ingredients', 'recipe_steps', 'menu_entries', 'menu_entry_recipes',
     'menu_entry_products', 'pantry_items', 'shopping_lists', 'shopping_items', 'purchases', 'purchase_items', 'consumption_logs',
-    'consumption_ingredients', 'receipt_aliases', 'household_settings', 'user_settings'] loop
+    'consumption_ingredients', 'receipt_aliases', 'household_settings', 'user_settings', 'menu_day_notes', 'quick_list_items', 'app_invites'] loop
     name := v_table;
     execute format('select count(*) from public.%I', v_table) into rows;
     return next;
@@ -400,4 +400,82 @@ do $$ begin
 end $$;
 select public._nothing_lost('sale el responsable');
 
-select 'OK: compartir el hogar no pierde nada' as resultado;
+-- 12. Modo sencillo: notas del menú y lista a mano, por hogar.
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$
+declare v_result jsonb;
+begin
+  insert into public.menu_day_notes (day, text) values ('2026-11-23', 'Lentejas y fruta'), ('2026-11-24', ''), ('2026-11-25', 'Tortilla');
+  assert (select household_id from public.menu_day_notes where day = '2026-11-23') = public.current_household_id(), 'la nota no es del hogar';
+  assert (select updated_by from public.menu_day_notes where day = '2026-11-23') = auth.uid(), 'no se apunta quién escribió la nota';
+  insert into public.quick_list_items (text, position) values ('Pan', 1), ('Leche', 2);
+  -- La semana siguiente ya tiene algo el miércoles: no se sobrescribe.
+  insert into public.menu_day_notes (day, text) values ('2026-12-02', 'Pizza');
+  v_result := public.copy_day_notes('2026-11-23', '2026-11-30');
+  assert v_result = '{"copied": 1, "kept": 1}'::jsonb, format('copia de semana inesperada: %s', v_result);
+  assert (select text from public.menu_day_notes where day = '2026-11-30') = 'Lentejas y fruta', 'no se copió el lunes';
+  assert (select text from public.menu_day_notes where day = '2026-12-02') = 'Pizza', 'se sobrescribió un día con texto';
+  assert not exists (select 1 from public.menu_day_notes where day = '2026-12-01'), 'se copió un día vacío';
+  begin
+    insert into public.quick_list_items (text) values ('   ');
+    raise exception 'se aceptó un apunte vacío';
+  exception when check_violation then null;
+  end;
+end $$;
+reset role;
+-- Dani (del hogar de Ana) ve y cambia lo mismo; Eva (otro hogar) no ve nada.
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000d';
+do $$ begin
+  assert (select count(*) from public.menu_day_notes where trim(text) <> '') = 4, 'Dani no ve las notas del hogar';
+  update public.quick_list_items set checked = true where text = 'Pan';
+  assert found, 'Dani no puede marcar lo comprado';
+  assert (select updated_by from public.quick_list_items where text = 'Pan') = auth.uid(), 'no se apunta quién lo marcó';
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000e';
+do $$ begin
+  assert (select count(*) from public.menu_day_notes) = 0 and (select count(*) from public.quick_list_items) = 0, 'Eva ve notas o apuntes de otro hogar';
+  update public.quick_list_items set text = 'Intruso';
+  assert not found, 'Eva cambió apuntes de otro hogar';
+  begin
+    insert into public.menu_day_notes (household_id, day, text) values ((select code::uuid from public._codes where name = 'hogar de Ana'), '2026-11-26', 'Intruso');
+    raise exception 'Eva escribió una nota en otro hogar';
+  exception when insufficient_privilege then null;
+  end;
+end $$;
+reset role;
+
+-- 13. Cambiar de modo, varias veces, no toca ningún otro dato.
+create table public._modes as
+select t.name, (xpath('/row/h/text()', query_to_xml(format(
+  'select md5(coalesce(string_agg(r, ''|'' order by r), '''')) as h from (select (to_jsonb(x) - ''mode'' - ''updated_at'' - ''updated_by'')::text as r from public.%I x) s', t.name), false, true, '')))[1]::text as hash
+from public._count_rows() t;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  insert into public.household_settings (mode) values ('sencillo') on conflict (household_id) do update set mode = excluded.mode;
+  assert (select mode from public.household_settings) = 'sencillo', 'no se cambió al modo sencillo';
+  update public.household_settings set mode = 'completo';
+  update public.household_settings set mode = 'sencillo';
+  update public.household_settings set mode = 'completo';
+  begin
+    update public.household_settings set mode = 'otro';
+    raise exception 'se aceptó un modo inventado';
+  exception when check_violation then null;
+  end;
+end $$;
+reset role;
+do $$
+declare r record; v_hash text;
+begin
+  for r in select * from public._modes loop
+    execute format('select md5(coalesce(string_agg(r, ''|'' order by r), '''')) from (select (to_jsonb(x) - ''mode'' - ''updated_at'' - ''updated_by'')::text as r from public.%I x) s', r.name) into v_hash;
+    assert v_hash = r.hash, format('cambiar de modo cambió %s', r.name);
+  end loop;
+end $$;
+select public._nothing_lost('modo sencillo');
+
+select 'OK: compartir el hogar y el modo sencillo no pierden nada' as resultado;

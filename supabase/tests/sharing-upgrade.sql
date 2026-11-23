@@ -1,4 +1,5 @@
--- Tras aplicar la fase 2 a una base de datos como la de producción: las cuentas
+-- Tras aplicar las migraciones posteriores a la fase 1 (fase 2 del hogar, modo
+-- sencillo…) a una base de datos como la de producción: las cuentas
 -- que ya existen no pierden ni cambian NADA y siguen viendo lo mismo.
 \set ON_ERROR_STOP on
 
@@ -32,6 +33,8 @@ do $$ begin
   assert (select count(*) from public.menu_entries) = 1, 'Ana no ve su menú';
   assert (select default_servings from public.household_settings) = 3 and (select week_starts_on from public.household_settings) = 0, 'Ana perdió sus preferencias';
   assert (select count(*) from public.household_member_list(public.current_household_id())) = 1, 'en el hogar de Ana aparece alguien más';
+  assert (select mode from public.household_settings) = 'completo', 'Ana no sigue en modo completo';
+  assert (select count(*) from public.menu_day_notes) = 0 and (select count(*) from public.quick_list_items) = 0, 'aparecen notas o apuntes que nadie escribió';
 end $$;
 reset role;
 do $$ begin
@@ -50,4 +53,4 @@ end $$;
 reset role;
 
 
-select 'OK: las cuentas actuales no pierden ni cambian nada con la fase 2' as resultado;
+select 'OK: las cuentas actuales no pierden ni cambian nada con las migraciones nuevas' as resultado;

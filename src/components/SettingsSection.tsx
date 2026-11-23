@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from 'react'
 import { friendlyError } from '../lib/errors'
-import { MEAL_IDS, saveSettings, useSettings, type MealId } from '../lib/settings'
+import { MEAL_IDS, saveMode, saveSettings, useSettings, type AppMode, type MealId } from '../lib/settings'
 import type { WeekStart } from '../lib/domain'
 import { NumberInput } from './NumberInput'
 import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, type ExportTables } from '../lib/export'
@@ -29,7 +29,7 @@ const TABLE_LABELS: Record<string, string> = {
   menu_entries: 'menú', menu_entry_recipes: 'recetas del menú', menu_entry_products: 'productos del menú',
   pantry_items: 'despensa', shopping_lists: 'listas de la compra', shopping_items: 'artículos de la compra',
   purchases: 'compras', purchase_items: 'artículos comprados', consumption_logs: 'consumos', consumption_ingredients: 'ingredientes consumidos',
-  receipt_aliases: 'alias de tickets', user_settings: 'preferencias de la cuenta', household_settings: 'preferencias del hogar',
+  receipt_aliases: 'alias de tickets', user_settings: 'preferencias de la cuenta', household_settings: 'preferencias del hogar', menu_day_notes: 'menú sencillo', quick_list_items: 'lista sencilla',
 }
 
 const card = 'rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm'
@@ -215,6 +215,45 @@ function AccountTab() {
 
 const MEAL_LABELS: Record<MealId, string> = { desayuno: 'Desayuno', almuerzo: 'Almuerzo', comida: 'Comida', merienda: 'Merienda', cena: 'Cena' }
 
+const MODES: Array<{ id: AppMode; title: string; text: string }> = [
+  { id: 'completo', title: 'Completo', text: 'Menú por comidas con recetas y productos, lista de la compra calculada, tickets y despensa.' },
+  { id: 'sencillo', title: 'Sencillo', text: 'Solo Menú, Compra y Ajustes: un texto por día y una lista de la compra escrita a mano.' },
+]
+
+// El modo es del hogar y solo cambia lo que se ve: se puede ir y volver sin perder nada.
+function ModeCard() {
+  const { settings, ready } = useSettings()
+  const { current } = useHouseholds()
+  const [saving, setSaving] = useState<AppMode | null>(null)
+  const [notice, setNotice] = useState<Notice>(null)
+
+  async function choose(mode: AppMode) {
+    if (mode === settings.mode) return
+    setSaving(mode); setNotice(null)
+    try {
+      await saveMode(mode)
+      setNotice({ kind: 'ok', text: mode === 'sencillo' ? 'Modo sencillo activado. Lo del modo completo sigue guardado y se ve, sin poder cambiarlo, debajo de cada día y en Compra.' : 'Modo completo activado. Lo escrito en el modo sencillo se ve como nota de cada día en el menú y como «Apuntado a mano» en la lista.' })
+    } catch (error) {
+      setNotice({ kind: 'error', text: friendlyError(error, 'No se ha podido cambiar el modo.') })
+    } finally { setSaving(null) }
+  }
+
+  return <section className={card}>
+    <h2 className="text-base font-semibold">Modo de la app</h2>
+    <p className="mt-1 text-sm text-neutral-500">Es del hogar: todas las personas de «{current?.name ?? 'tu hogar'}» ven la app igual. Puedes cambiar cuando quieras: no se pierde nada.</p>
+    <div role="radiogroup" aria-label="Modo de la app" className="mt-4 grid gap-2 sm:grid-cols-2">
+      {MODES.map((mode) => {
+        const active = settings.mode === mode.id
+        return <button key={mode.id} type="button" role="radio" aria-checked={active} disabled={!ready || saving !== null} onClick={() => void choose(mode.id)} className={`rounded-2xl border p-4 text-left transition disabled:opacity-60 ${active ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 hover:bg-neutral-50'}`}>
+          <span className="flex items-center justify-between text-sm font-semibold text-neutral-900">{mode.title}{active && <span className="text-xs font-medium text-emerald-700">En uso</span>}{saving === mode.id && <span className="text-xs font-normal text-neutral-500">Cambiando…</span>}</span>
+          <span className="mt-1 block text-xs text-neutral-500">{mode.text}</span>
+        </button>
+      })}
+    </div>
+    <NoticeText notice={notice} />
+  </section>
+}
+
 function PreferencesTab() {
   const { settings, loadError } = useSettings()
   const { current, version } = useHouseholds()
@@ -244,7 +283,7 @@ function PreferencesTab() {
     setSaving(true)
     setNotice(null)
     try {
-      await saveSettings({ defaultServings: value, weekStartsOn, visibleMeals: meals })
+      await saveSettings({ ...settings, defaultServings: value, weekStartsOn, visibleMeals: meals })
       setNotice({ kind: 'ok', text: 'Preferencias guardadas.' })
     } catch (error) {
       setNotice({ kind: 'error', text: friendlyError(error, 'No se han podido guardar las preferencias.') })
@@ -253,6 +292,7 @@ function PreferencesTab() {
 
   return (
     <div className="space-y-4">
+    <ModeCard />
     <section className={card}>
       <h2 className="text-base font-semibold">Planificación</h2>
       <p className="mt-1 text-sm text-neutral-500">Son del hogar: valen para todas las personas de «{current?.name ?? 'tu hogar'}».</p>
@@ -279,7 +319,7 @@ function PreferencesTab() {
       </form>
       <NoticeText notice={notice} />
     </section>
-    <ReceiptAliasesCard key={version} />
+    {settings.mode === 'completo' && <ReceiptAliasesCard key={version} />}
     </div>
   )
 }

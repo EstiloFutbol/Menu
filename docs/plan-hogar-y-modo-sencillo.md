@@ -1,11 +1,12 @@
 # Plan: modo hogar (familiar) y modo sencillo
 
-Estado: **fases 1 y 2 hechas** (versiones 0.5.9 y 0.6.0). Quedan la fase 3 (modo sencillo) y la 4 (cambios en vivo).
+Estado: **fases 1, 2 y 3 hechas** (versiones 0.5.9, 0.6.0 y 0.6.1). Queda la fase 4 (cambios en vivo y autoría).
 
 Diferencias con lo previsto al hacer la fase 2:
 - Las invitaciones a un hogar reutilizan `app_invites` (`kind = 'household'` y `household_id`), no una tabla `household_invites` aparte.
 - No se crean hogares nuevos: para compartir, el responsable invita a su hogar personal. Quien se une puede salir; el dueño del hogar personal no.
 - La copia al salir incluye también las traducciones de tickets. Las compras copiadas no tocan la despensa.
+- En la fase 3, el interruptor está en Ajustes → Preferencias. En modo completo, las notas del día solo aparecen (y se pueden cambiar) en los días que tienen texto. «Copiar a la siguiente» del menú sencillo solo rellena días vacíos.
 - Al volver a la app tras más de un minuto fuera, las secciones abiertas se recargan si no hay cambios sin guardar. No hay botón de recargar: también se recarga al abrir cada sección.
 
 ## Decisiones tomadas

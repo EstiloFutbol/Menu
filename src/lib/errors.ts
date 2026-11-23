@@ -54,6 +54,7 @@ const knownMessages: Record<string, string> = {
   'Use leave_household to leave': 'Para irte del hogar usa «Salir del hogar».',
   'Only the household owner can rename it': 'Solo el responsable puede cambiar el nombre del hogar.',
   'Invalid household name': 'El nombre del hogar debe tener entre 1 y 80 caracteres.',
+  'Choose a different week': 'Elige una semana distinta.',
   'Slot has consumption': 'No puedes convertir en “Comida fuera” una comida que ya tiene algo consumido.',
 }
 

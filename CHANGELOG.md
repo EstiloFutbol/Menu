@@ -6,6 +6,14 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.1 — 2026-11-23
+
+- Modo sencillo: en Ajustes → Preferencias → «Modo de la app» eliges Completo o Sencillo. El modo es del hogar, así que todos lo ven igual. Se puede cambiar cuantas veces quieras sin perder nada.
+- En modo sencillo la app tiene solo Menú, Compra y Ajustes:
+  - Menú: un cuadro de texto por día que se guarda solo mientras escribes, y «Copiar a la siguiente» semana (nunca sobrescribe un día que ya tenga texto). Debajo de cada día ves lo que haya en el menú completo.
+  - Compra: una lista escrita a mano. Puedes pegar varias líneas de golpe, marcar lo comprado, ordenar y «Quitar lo comprado». Debajo ves la lista completa de la semana.
+- En modo completo también se ve lo escrito en el sencillo: el texto de cada día aparece como «Nota» en el menú y la lista sencilla como «Apuntado a mano» en la lista de la compra.
+
 ## 0.6.0 — 2026-11-23
 
 - Modo hogar: ya puedes compartir el menú, las recetas, la compra, la despensa y los tickets con otras personas. Está en la nueva pestaña Ajustes → Hogar.
