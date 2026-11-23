@@ -10,11 +10,12 @@ Aplicación personal para planificar el menú semanal, gestionar recetas, la com
 ## Comandos
 - Instalar: `npm ci`
 - Comprobar antes de terminar: `npm test` y `npm run build`
+- Si cambias migraciones o funciones SQL: `npm run test:db` (necesita PostgreSQL 16 local; amplía `supabase/tests/` con lo nuevo)
 
 ## Normas del proyecto
 - Credenciales solo en `.env.local` (ver `.env.example`); en el navegador solo la publishable key.
 - `supabase/migrations/` es la única fuente de verdad del esquema: deben bastar para crear un proyecto vacío desde cero. Nada de `schema.sql` paralelo.
-- Todas las tablas usan RLS para aislar los datos de cada usuario.
+- Todas las tablas usan RLS para aislar los datos de cada hogar (`household_id = current_household_id()`; ver `docs/plan-hogar-y-modo-sencillo.md`).
 - Las imágenes de tickets no se almacenan nunca: solo se usan durante el OCR.
 - Lógica de dominio en `src/lib/` con tests en Vitest (fixtures OCR en `__fixtures__/`).
 
