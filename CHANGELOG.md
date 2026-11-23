@@ -6,6 +6,13 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.6 — 2026-11-25
+
+- Menú: «Añadir también en otras franjas» pasa a llamarse «Añadir en varias comidas o días», con textos más claros al elegir dónde repetir lo añadido.
+- Toda la app habla de «comidas» en vez de «franjas» (por ejemplo, «Copiar comida»).
+- Menú: «Añadir en varias comidas o días» está siempre disponible al abrir una comida con algo planificado y repite todo lo que hay en ella, como pendiente. Se quita el botón «Copiar a…», que hacía lo mismo.
+- Menú: ya no aparece «Revisa los productos y cantidades antes de guardar» por una fila que se dejó sin elegir: esas filas se ignoran al guardar. Si a una receta o un producto elegido le faltan las raciones o la cantidad, el aviso dice cuál es y marca la casilla en rojo, y el aviso ya no se queda en la pantalla del menú al cerrar la ventana.
+
 ## 0.5.5 — 2026-11-25
 
 - Tickets en foto: la app busca el ticket en la foto, lo recorta y lo endereza (también si está en perspectiva) antes de leerlo, así el texto se lee más grande y recto. Además lee una versión enfocada de la imagen.

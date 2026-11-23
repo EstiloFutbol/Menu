@@ -15,7 +15,7 @@ export function describeWeekCopy(result: WeekCopyResult, targetLabel: string, de
     result.products ? plural(result.products, 'producto', 'productos') : '',
   ].filter(Boolean).join(' y ')
   parts.push(result.slots
-    ? `Semana copiada a ${targetLabel}: ${plural(result.slots, 'franja', 'franjas')}${content ? ` (${content}, como pendientes)` : ''}.`
+    ? `Semana copiada a ${targetLabel}: ${plural(result.slots, 'comida', 'comidas')}${content ? ` (${content}, como pendientes)` : ''}.`
     : `No se ha copiado nada a ${targetLabel}.`)
   const planned = result.skipped.filter((item) => item.reason === 'planned')
   const eatingOut = result.skipped.filter((item) => item.reason === 'eating_out')

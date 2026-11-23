@@ -231,7 +231,7 @@ function PreferencesTab() {
     event.preventDefault()
     const value = Number(servings)
     if (!Number.isInteger(value) || value < 1 || value > 20) { setNotice({ kind: 'error', text: 'Las raciones deben ser un número entero de 1 a 20.' }); return }
-    if (!meals.length) { setNotice({ kind: 'error', text: 'Deja al menos una franja marcada.' }); return }
+    if (!meals.length) { setNotice({ kind: 'error', text: 'Deja al menos una comida marcada.' }); return }
     setSaving(true)
     setNotice(null)
     try {
@@ -263,7 +263,7 @@ function PreferencesTab() {
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {MEAL_IDS.map((id) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={meals.includes(id)} onChange={() => toggleMeal(id)} /> {MEAL_LABELS[id]}</label>)}
           </div>
-          <p className="mt-1 text-xs text-neutral-400">Al menos una. Lo ya planificado en franjas ocultas no se borra.</p>
+          <p className="mt-1 text-xs text-neutral-400">Al menos una. Lo ya planificado en comidas ocultas no se borra.</p>
         </fieldset>
         <button type="submit" disabled={saving} className="rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar preferencias'}</button>
       </form>
