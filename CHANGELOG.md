@@ -6,6 +6,11 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.5.9 — 2026-11-23
+
+- Preparación del modo hogar: tus datos pasan a guardarse en tu «hogar» en vez de en tu cuenta. Por ahora no cambia nada de lo que ves; es la base para poder compartir despensa, menú y compra en la próxima versión.
+- Seguridad: si algún día se borra una cuenta, lo que esa persona añadió a un hogar ya no se borra.
+
 ## 0.5.8 — 2026-11-23
 
 - Invitaciones: solo se puede crear una cuenta con el código de invitación de alguien que ya usa Menu. En Ajustes → Cuenta → Invitaciones creas códigos (hasta 5 sin usar a la vez, de un solo uso, caducan a los 7 días), los compartes con un enlace y puedes anularlos.

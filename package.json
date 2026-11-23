@@ -1,7 +1,7 @@
 {
   "name": "menu",
   "private": true,
-  "version": "0.5.8",
+  "version": "0.5.9",
   "type": "module",
   "scripts": {
     "predev": "node scripts/copy-ocr-assets.mjs",
@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:db": "bash scripts/test-db.sh",
     "bench:ocr": "tsx scripts/ocr-bench.ts"
   },
   "dependencies": {

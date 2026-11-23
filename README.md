@@ -203,6 +203,22 @@ La migración `20261125000200_app_invites.sql` añade las invitaciones a la app 
 - Para que funcione hay que activar en Supabase *Authentication → Sign In / Providers → Allow new users to sign up*, siempre **después** de aplicar la migración.
 - Las cuentas creadas desde el panel de Supabase también necesitan código. Si hiciera falta crear una a mano, se desactiva el trigger un momento con `alter table auth.users disable trigger before_auth_user_created_require_invite;` y se vuelve a activar con `enable trigger`.
 
+La migración `20261125000300_households.sql` es la **fase 1 del modo hogar** (ver `docs/plan-hogar-y-modo-sencillo.md`). Los datos pasan a pertenecer a un hogar en vez de a un usuario:
+- Tablas nuevas: `households` (con `personal_for` para el hogar personal de cada cuenta) y `household_members`. Además, `user_settings.active_household_id`.
+- `current_household_id()` devuelve el hogar activo si el usuario sigue siendo miembro; si no, su hogar personal.
+- Las 8 tablas con dueño reciben `household_id`, relleno con el hogar personal del dueño y con valor por defecto `current_household_id()`.
+- `user_id` queda como «quién lo hizo»: borrar una cuenta lo deja a `null` y no borra datos.
+- Las restricciones únicas y las políticas RLS pasan de usuario a hogar, y las funciones de la app filtran por el hogar actual.
+- Cada cuenta nueva recibe su hogar personal con los productos básicos.
+- Por fuera no cambia nada. **Antes de aplicarla en Supabase, descarga la copia de seguridad de cada cuenta** (Ajustes → Copia de seguridad).
+
+### Probar las migraciones
+
+`npm run test:db` levanta un PostgreSQL 16 temporal (necesita `initdb`, `pg_ctl` y `psql`; ruta configurable con `PG_BIN`) y hace lo siguiente:
+1. Aplica las migraciones anteriores al hogar y crea datos de dos cuentas con `supabase/tests/households-before.sql`.
+2. Aplica la migración del hogar y el resto.
+3. Ejecuta las comprobaciones de `supabase/tests/households-after.sql`: no se pierde ninguna fila, cada hogar ve solo lo suyo, todas las funciones siguen funcionando, hogar compartido, cuentas nuevas y borrado de cuentas.
+
 ### Preparación de las fotos de tickets
 
 Antes del OCR, `src/lib/receipt-pixels.ts` prepara la foto. El mismo código lo usan la app y el banco de pruebas.
