@@ -7,6 +7,7 @@ import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, 
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
 import ReceiptAliasesCard from './ReceiptAliasesCard'
+import InvitesCard from './InvitesCard'
 import changelogText from '../../CHANGELOG.md?raw'
 import { formatChangelogDate, parseChangelog } from '../lib/changelog'
 
@@ -156,6 +157,8 @@ function AccountTab() {
         </div>
         <NoticeText notice={sessionNotice} />
       </section>
+
+      <InvitesCard />
 
       <section className={card}>
         <h2 className="text-base font-semibold">Cambiar contraseña</h2>
