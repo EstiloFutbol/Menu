@@ -71,7 +71,7 @@ export default function InvitesCard({ household }: { household: Household }) {
     await load()
   }
 
-  return <section className={card}>
+  return <section data-tour="hogar-invitar" className={card}>
     <h2 className="text-base font-semibold">Invitaciones</h2>
     <p className="mt-2 text-sm text-neutral-500">Solo se puede entrar en Menu con una invitación. Cada código sirve para una persona y caduca a los 7 días. Puedes tener {MAX_ACTIVE} sin usar a la vez.</p>
     <div className="mt-4 grid gap-2 sm:grid-cols-2">

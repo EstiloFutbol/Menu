@@ -86,7 +86,7 @@ function CurrentHouseholdCard({ household, onLeft }: { household: Household; onL
     catch (cause) { setNotice({ kind: 'error', text: friendlyError(cause, 'No se ha podido quitar a esa persona.') }) }
   }
 
-  return <section className={card}>
+  return <section data-tour="hogar-actual" className={card}>
     <div className="flex items-start gap-3">
       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-2xl bg-neutral-100 text-neutral-700"><Home size={19} /></div>
       <div className="min-w-0 flex-1">
@@ -173,7 +173,7 @@ function JoinHouseholdCard({ onJoined }: { onJoined: (text: string) => void }) {
     } finally { setBusy(false) }
   }
 
-  return <section className={card}>
+  return <section data-tour="hogar-unirse" className={card}>
     <h2 className="text-base font-semibold">Unirme a un hogar</h2>
     <p className="mt-2 text-sm text-neutral-500">Escribe el código que te ha dado alguien de ese hogar. No pierdes nada: tus datos siguen en tu hogar personal.</p>
     <form onSubmit={join} className="mt-4 flex gap-2">

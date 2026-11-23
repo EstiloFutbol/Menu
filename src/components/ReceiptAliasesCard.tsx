@@ -68,7 +68,7 @@ function ReceiptAliasesCard() {
 
   const count = aliases.length
   return (
-    <section className="rounded-3xl border border-neutral-200 bg-white shadow-sm">
+    <section data-tour="ticket-traducciones" className="rounded-3xl border border-neutral-200 bg-white shadow-sm">
       <button type="button" onClick={() => setOpen(!open)} aria-expanded={open} className="flex w-full items-center gap-3 px-4 py-3 text-left sm:px-5">
         <Languages size={18} className="shrink-0 text-neutral-500" />
         <span className="min-w-0 flex-1">

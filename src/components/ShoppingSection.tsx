@@ -8,6 +8,7 @@ import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 import { QuickList } from './QuickList'
+import { useTutorial } from '../lib/tutorial'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -121,6 +122,7 @@ function ShoppingSection() {
     void loadList()
   }, [loadList])
   useRefreshOnReturn(loadList)
+  useTutorial('compra-lista', !loading)
 
   useEffect(() => {
     if (!supabase) return
@@ -425,7 +427,7 @@ function ShoppingSection() {
           <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Lista de la compra</h1>
           <p className="mt-1 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div data-tour="compra-semana" className="flex flex-wrap gap-2">
           <button onClick={() => setWeekStart((current) => addDays(current, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600"><ChevronLeft size={18} /></button>
           <button onClick={() => setWeekStart(startOfWeek(new Date(), weekStartsOn))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700">Esta semana</button>
           <button onClick={() => setWeekStart((current) => addDays(current, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600"><ChevronRight size={18} /></button>
@@ -439,11 +441,11 @@ function ShoppingSection() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => void generateList()} disabled={generating} className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
+        <button data-tour="compra-generar" onClick={() => void generateList()} disabled={generating} className="inline-flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-50">
           <RefreshCw size={16} className={generating ? 'animate-spin' : ''} />
           {generating ? 'Generando…' : items.length ? 'Regenerar desde menú' : 'Generar desde menú'}
         </button>
-        <button onClick={() => setShowManual((current) => !current)} className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700"><Plus size={16} /> Añadir manualmente</button>
+        <button data-tour="compra-manual" onClick={() => setShowManual((current) => !current)} className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700"><Plus size={16} /> Añadir manualmente</button>
         {checkedCount > 0 && (
           <button onClick={() => void addPurchasedToPantry()} disabled={addingToPantry} className="inline-flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50"><ShoppingBasket size={16} /> {addingToPantry ? 'Añadiendo…' : 'Añadir comprados a despensa'}</button>
         )}
@@ -486,7 +488,7 @@ function ShoppingSection() {
           <p className="mx-auto mt-1 max-w-md text-sm leading-6 text-neutral-500">Planifica recetas o productos en Menú y pulsa “Generar desde menú”. Se tendrán en cuenta las raciones y la despensa.</p>
         </div>
       ) : (
-        <div className="space-y-4">
+        <div data-tour="compra-lista" className="space-y-4">
           {groupedItems.map(([category, categoryItems]) => (
             <section key={category} className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
               <div className="border-b border-neutral-100 px-5 py-3"><h2 className="text-sm font-semibold text-neutral-700">{category}</h2></div>

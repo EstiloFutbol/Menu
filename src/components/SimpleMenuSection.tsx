@@ -7,6 +7,7 @@ import { useSettings } from '../lib/settings'
 import { describeNotesCopy, plannedDaySummary } from '../lib/simple'
 import { supabase } from '../lib/supabase'
 import { DayNoteEditor } from './DayNoteEditor'
+import { useTutorial } from '../lib/tutorial'
 
 type PlannedEntry = Parameters<typeof plannedDaySummary>[0][number] & { planned_date: string }
 
@@ -49,6 +50,7 @@ export default function SimpleMenuSection() {
 
   useEffect(() => { void load() }, [load])
   useRefreshOnReturn(() => load(true))
+  useTutorial('menu-sencillo', !loading)
 
   async function copyToNextWeek() {
     if (!supabase) return
@@ -74,7 +76,7 @@ export default function SimpleMenuSection() {
         <h1 className="mt-1 text-3xl font-semibold tracking-tight text-neutral-950">Tu menú</h1>
         <p className="mt-2 text-sm text-neutral-500">{formatWeekRange(weekStart)}</p>
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div data-tour="menu-semana" className="flex flex-wrap gap-2">
         <button onClick={() => setWeekStart(addDays(weekStart, -7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana anterior"><ChevronLeft size={18} /></button>
         <button onClick={() => setWeekStart(startOfWeek(new Date(), weekStartsOn))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium text-neutral-700 shadow-sm">Esta semana</button>
         <button onClick={() => setWeekStart(addDays(weekStart, 7))} className="grid h-10 w-10 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm" aria-label="Semana siguiente"><ChevronRight size={18} /></button>
@@ -92,7 +94,7 @@ export default function SimpleMenuSection() {
       {days.map((day) => {
         const summary = plannedDaySummary(planned.filter((entry) => entry.planned_date === day.date))
         const isToday = day.date === today
-        return <section key={day.date} className={`rounded-3xl border bg-white p-4 shadow-sm ${isToday ? 'border-neutral-900' : 'border-neutral-200'}`}>
+        return <section key={day.date} data-tour={day.date === exampleDay ? 'menu-dia' : undefined} className={`rounded-3xl border bg-white p-4 shadow-sm ${isToday ? 'border-neutral-900' : 'border-neutral-200'}`}>
           <h2 className="flex items-baseline gap-2 text-sm font-semibold text-neutral-900">{day.label}<span className="text-xs font-normal text-neutral-400">{formatDay(day.date)}{isToday ? ' · Hoy' : ''}</span></h2>
           <div className="mt-2">
             <DayNoteEditor key={day.date} day={day.date} serverText={notes[day.date] ?? ''} label={`Menú del ${day.label.toLowerCase()} ${formatDay(day.date)}`} placeholder={day.date === exampleDay ? 'Comida: lentejas y fruta. Cena: tortilla.' : undefined} onSaved={(date, text) => setNotes((current) => ({ ...current, [date]: text }))} />

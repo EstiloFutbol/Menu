@@ -4,6 +4,7 @@ import { useRefreshOnReturn } from '../lib/refresh'
 import { useSettings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 import { QuickList } from './QuickList'
+import { useTutorial } from '../lib/tutorial'
 
 type FullListItem = { id: string; manual_name: string | null; quantity: number | null; unit: string | null; checked: boolean; ingredient: { name: string } | null }
 
@@ -23,6 +24,7 @@ export default function SimpleShoppingSection() {
   }, [weekKey])
   useEffect(() => { void loadFullList() }, [loadFullList])
   useRefreshOnReturn(loadFullList)
+  useTutorial('compra-sencilla')
 
   return <div className="mx-auto max-w-2xl space-y-5">
     <header>

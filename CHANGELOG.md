@@ -6,6 +6,12 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.4 — 2026-11-23
+
+- Tutoriales: la primera vez que entras en cada pestaña (Menú, Recetas, Compra → Lista, Ticket e Historial, Despensa, Productos y cada parte de Ajustes) sale un tutorial corto que va señalando la pantalla paso a paso. El modo sencillo tiene los suyos.
+- En cada paso puedes ir a «Siguiente» o «Anterior», o «Saltar tutorial». Una vez terminado o saltado, ese tutorial no vuelve a salir en esa pestaña, tampoco en tus otros dispositivos.
+- Nuevo apartado Ajustes → Preferencias → Ayuda: puedes ver de nuevo cualquier tutorial con «Ver» (la app te lleva a su pestaña), o hacer que vuelvan a salir todos al entrar.
+
 ## 0.6.3 — 2026-11-23
 
 - Cambios en vivo: lo que cambie otra persona del hogar (la lista, el menú, la despensa, las notas, los tickets…) aparece al momento en tu pantalla, sin recargar y sin «Cargando…». Si estás escribiendo algo sin guardar, no se te cambia nada debajo. Si tienes la app en segundo plano, se actualiza al volver.

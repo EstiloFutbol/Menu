@@ -13,6 +13,7 @@ import type { PantryNotice } from '../lib/pantry-notice'
 import { setLeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
 import ReceiptAliasesCard from './ReceiptAliasesCard'
+import { useTutorial } from '../lib/tutorial'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -409,6 +410,8 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
     return () => window.removeEventListener('beforeunload', warn)
   })
   useEffect(() => () => setLeaveGuard(null), [])
+  // Tutorial en la pantalla de inicio (antes de leer un ticket).
+  useTutorial('compra-ticket', !lines.length && !reading)
 
   if (!lines.length && !reading) {
     return <div className="space-y-5">
@@ -419,7 +422,7 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
           <div className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-neutral-100"><ReceiptText size={25} /></div>
           <h2 className="mt-4 text-xl font-semibold">Importar ticket</h2>
           <p className="mt-2 text-sm leading-6 text-neutral-500">Puedes leer un ticket desde una foto, subir el PDF del ticket digital (como el que Mercadona envía por correo) o crear uno vacío y rellenarlo manualmente. En ambos casos revisarás todos los productos antes de guardar.</p>
-          <div className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
+          <div data-tour="ticket-subir" className="mt-6 flex flex-col justify-center gap-2 sm:flex-row">
             <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-2xl bg-neutral-900 px-5 py-3 text-sm font-semibold text-white">
               <Camera size={18} /> Hacer foto o elegir ticket
               <input type="file" accept="image/*" capture="environment" onChange={handleImage} className="hidden" />
@@ -432,7 +435,7 @@ export default function ReceiptImportSection({ onImported }: { onImported?: (not
               <FilePlus2 size={18} /> Crear ticket vacío
             </button>
           </div>
-          <div className="mt-5 grid gap-2 text-left text-xs text-neutral-500 sm:grid-cols-3">
+          <div data-tour="ticket-pasos" className="mt-5 grid gap-2 text-left text-xs text-neutral-500 sm:grid-cols-3">
             <div className="rounded-2xl bg-neutral-50 p-3"><span className="font-semibold text-neutral-700">1. Leer</span><p className="mt-1">Extrae los conceptos y precios visibles.</p></div>
             <div className="rounded-2xl bg-neutral-50 p-3"><span className="font-semibold text-neutral-700">2. Traducir</span><p className="mt-1">Corrige abreviaturas y asocia alimentos.</p></div>
             <div className="rounded-2xl bg-neutral-50 p-3"><span className="font-semibold text-neutral-700">3. Confirmar</span><p className="mt-1">Revisa cantidades y decide qué entra en despensa.</p></div>

@@ -485,4 +485,33 @@ do $$ begin
     'faltan tablas en la publicación de Realtime';
 end $$;
 
-select 'OK: compartir el hogar, el modo sencillo y los cambios en vivo no pierden nada' as resultado;
+-- 15. Tutoriales vistos: por cuenta, sin repetir, y nadie ve los de otro.
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000e';
+do $$ begin
+  assert public.mark_tutorial_seen('menu') = '{menu}', 'no se apuntó el primer tutorial';
+  perform public.mark_tutorial_seen('compra-ticket');
+  assert public.mark_tutorial_seen('menu') = '{menu,compra-ticket}', 'se repitió un tutorial';
+  begin
+    perform public.mark_tutorial_seen('<script>');
+    raise exception 'se aceptó un nombre de tutorial raro';
+  exception when raise_exception then
+    if sqlerrm <> 'Invalid tutorial' then raise; end if;
+  end;
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';
+do $$ begin
+  assert (select coalesce(tutorials_seen, '{}') from public.user_settings) = '{}', 'Ana ve tutoriales de otra cuenta';
+end $$;
+reset role;
+set role authenticated;
+set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000e';
+do $$ begin
+  perform public.reset_tutorials();
+  assert (select tutorials_seen from public.user_settings) = '{}', 'no se reiniciaron los tutoriales';
+end $$;
+reset role;
+
+select 'OK: compartir el hogar, el modo sencillo, los cambios en vivo y los tutoriales no pierden nada' as resultado;

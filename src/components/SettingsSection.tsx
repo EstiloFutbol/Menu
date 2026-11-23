@@ -11,6 +11,9 @@ import { useHouseholds } from '../lib/household'
 import { pendingInviteCode } from '../lib/invites'
 import changelogText from '../../CHANGELOG.md?raw'
 import { formatChangelogDate, parseChangelog } from '../lib/changelog'
+import { HelpCircle } from 'lucide-react'
+import { requestTutorial, resetTutorials, useRequestedTab, useTutorial } from '../lib/tutorial'
+import { TUTORIALS, tutorialsForMode } from '../lib/tutorials'
 
 const changelog = parseChangelog(changelogText)
 const buildDate = new Date(__APP_BUILD_DATE__)
@@ -178,7 +181,7 @@ function AccountTab() {
         <NoticeText notice={passwordNotice} />
       </section>
 
-      <section className={card}>
+      <section data-tour="cuenta-copia" className={card}>
         <h2 className="text-base font-semibold">Copia de seguridad</h2>
         <p className="mt-2 text-sm text-neutral-500">Descarga un archivo JSON con todos los datos del hogar que estás viendo. No se sube a ningún sitio.</p>
         <button type="button" onClick={exportData} disabled={exporting} className={`${buttonClass} mt-4`}>{exporting ? 'Exportando…' : 'Descargar mis datos'}</button>
@@ -191,7 +194,7 @@ function AccountTab() {
         )}
       </section>
 
-      <section className={card}>
+      <section data-tour="cuenta-sobre" className={card}>
         <h2 className="text-base font-semibold">Sobre la app</h2>
         <p className="mt-2 text-sm text-neutral-500">Versión <span className="font-medium text-neutral-900">{__APP_VERSION__}</span>{builtAt && <> · publicada el {builtAt}</>}{__APP_COMMIT__ && <span className="text-neutral-400"> ({__APP_COMMIT__})</span>}</p>
         <button type="button" onClick={checkUpdates} disabled={updating} className={`${buttonClass} mt-4`}>{updating ? 'Buscando…' : 'Buscar actualizaciones'}</button>
@@ -237,7 +240,7 @@ function ModeCard() {
     } finally { setSaving(null) }
   }
 
-  return <section className={card}>
+  return <section data-tour="pref-modo" className={card}>
     <h2 className="text-base font-semibold">Modo de la app</h2>
     <p className="mt-1 text-sm text-neutral-500">Es del hogar: todas las personas de «{current?.name ?? 'tu hogar'}» ven la app igual. Puedes cambiar cuando quieras: no se pierde nada.</p>
     <div role="radiogroup" aria-label="Modo de la app" className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -249,6 +252,33 @@ function ModeCard() {
         </button>
       })}
     </div>
+    <NoticeText notice={notice} />
+  </section>
+}
+
+// Ayuda: volver a ver cualquier tutorial. Al pulsar «Ver», la app va a esa pestaña y lo empieza.
+function HelpCard() {
+  const { settings } = useSettings()
+  const [notice, setNotice] = useState<Notice>(null)
+  const [resetting, setResetting] = useState(false)
+
+  async function reset() {
+    setResetting(true); setNotice(null)
+    try { await resetTutorials(); setNotice({ kind: 'ok', text: 'Hecho: cada tutorial volverá a salir la primera vez que entres en su pestaña.' }) }
+    catch (error) { setNotice({ kind: 'error', text: friendlyError(error, 'No se ha podido.') }) }
+    finally { setResetting(false) }
+  }
+
+  return <section data-tour="pref-ayuda" className={card}>
+    <h2 className="flex items-center gap-2 text-base font-semibold"><HelpCircle size={18} className="text-neutral-500" /> Ayuda</h2>
+    <p className="mt-1 text-sm text-neutral-500">Tutoriales de cada pestaña. Pulsa «Ver» para verlo otra vez.</p>
+    <ul className="mt-3 divide-y divide-neutral-100 rounded-2xl border border-neutral-200">
+      {tutorialsForMode(settings.mode).map((id) => <li key={id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+        <span className="text-sm text-neutral-800">{TUTORIALS[id].title}</span>
+        <button type="button" onClick={() => requestTutorial(id)} className="rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50">Ver</button>
+      </li>)}
+    </ul>
+    <button type="button" onClick={() => void reset()} disabled={resetting} className={`${buttonClass} mt-3`}>{resetting ? 'Un momento…' : 'Volver a mostrarlos todos al entrar'}</button>
     <NoticeText notice={notice} />
   </section>
 }
@@ -292,7 +322,7 @@ function PreferencesTab() {
   return (
     <div className="space-y-4">
     <ModeCard />
-    <section className={card}>
+    <section data-tour="pref-planificacion" className={card}>
       <h2 className="text-base font-semibold">Planificación</h2>
       <p className="mt-1 text-sm text-neutral-500">Son del hogar: valen para todas las personas de «{current?.name ?? 'tu hogar'}».</p>
       {loadError && <p role="alert" className="mt-2 text-sm text-red-600">{loadError}</p>}
@@ -318,6 +348,7 @@ function PreferencesTab() {
       </form>
       <NoticeText notice={notice} />
     </section>
+    <HelpCard />
     </div>
   )
 }
@@ -327,11 +358,16 @@ function SettingsSection() {
   const [tab, setTabState] = useState<Tab>(() => (pendingInviteCode() ? 'hogar' : lastTab))
   const setTab = (next: Tab) => { lastTab = next; setTabState(next) }
   const tabs: Array<{ id: Tab; label: string }> = [{ id: 'cuenta', label: 'Cuenta' }, { id: 'hogar', label: 'Hogar' }, { id: 'preferencias', label: 'Preferencias' }]
+  // Tutorial de cada pestaña la primera vez (o el pedido desde Ayuda, en su pestaña).
+  useRequestedTab('ajustes', (next) => setTab(next as Tab))
+  useTutorial('ajustes-cuenta', tab === 'cuenta')
+  useTutorial('ajustes-hogar', tab === 'hogar')
+  useTutorial('ajustes-preferencias', tab === 'preferencias')
 
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="text-2xl font-semibold tracking-tight">Ajustes</h1>
-      <div role="tablist" aria-label="Secciones de ajustes" className="mt-4 flex gap-1 rounded-2xl border border-neutral-200 bg-white p-1">
+      <div data-tour="ajustes-pestanas" role="tablist" aria-label="Secciones de ajustes" className="mt-4 flex gap-1 rounded-2xl border border-neutral-200 bg-white p-1">
         {tabs.map(({ id, label }) => (
           <button key={id} role="tab" type="button" aria-selected={tab === id} onClick={() => setTab(id)} className={`flex-1 rounded-xl px-3 py-2 text-sm font-medium transition ${tab === id ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-50'}`}>{label}</button>
         ))}

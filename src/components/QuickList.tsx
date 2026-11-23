@@ -91,14 +91,14 @@ export function QuickList({ editable }: { editable: boolean }) {
 
   return <section className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
     {!editable && <div className="border-b border-neutral-100 px-5 py-3"><h2 className="text-sm font-semibold text-neutral-700">Apuntado a mano</h2><p className="text-xs text-neutral-400">Lo escrito en la lista del modo sencillo.</p></div>}
-    {editable && <form onSubmit={add} className="flex items-start gap-2 p-3 pb-2 sm:p-4 sm:pb-2">
+    {editable && <form data-tour="lista-anadir" onSubmit={add} className="flex items-start gap-2 p-3 pb-2 sm:p-4 sm:pb-2">
       <textarea aria-label="Añadir a la lista" rows={1} value={input} maxLength={QUICK_ITEM_MAX * 50} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} placeholder="Añadir a la lista" title="Una cosa por línea: puedes pegar varias a la vez" className="min-h-11 flex-1 resize-none rounded-2xl border border-neutral-200 px-4 py-2.5 text-sm outline-none focus:border-neutral-900" />
       <button type="submit" disabled={busy || !input.trim()} className="flex h-11 shrink-0 items-center gap-1.5 rounded-2xl bg-neutral-900 px-4 text-sm font-medium text-white disabled:opacity-40"><Plus size={16} /> Añadir</button>
     </form>}
     {editable && <p className="border-b border-neutral-100 px-4 py-2 text-xs text-neutral-400 sm:px-5">Una cosa por línea. Puedes pegar una lista entera y se añade todo.</p>}
     {error && <p role="alert" className="px-5 pt-3 text-sm text-red-600">{error}</p>}
     {editable && loaded && !items.length && !error && <p className="px-5 py-8 text-center text-sm text-neutral-400">La lista está vacía. Escribe arriba lo que necesites comprar.</p>}
-    <ul className="divide-y divide-neutral-100">
+    <ul data-tour={items.length ? 'lista-items' : undefined} className="divide-y divide-neutral-100">
       {items.map((item, index) => <li key={item.id} className={`flex items-center gap-3 px-4 py-2.5 sm:px-5 ${item.checked ? 'bg-neutral-50' : ''}`}>
         <button type="button" onClick={() => void toggle(item)} className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition ${item.checked ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 bg-white'}`} aria-label={item.checked ? `Marcar ${item.text} como pendiente` : `Marcar ${item.text} como comprado`}>{item.checked && <Check size={15} />}</button>
         <p className={`min-w-0 flex-1 break-words text-sm ${item.checked ? 'text-neutral-400 line-through' : 'text-neutral-800'}`}>{item.text}{addedByOther(item) && <span className="ml-1.5 text-[11px] font-normal text-neutral-400 no-underline">· {addedByOther(item)}</span>}</p>
