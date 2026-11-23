@@ -9,6 +9,8 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 ## 0.5.6 — 2026-11-25
 
 - Menú: «Añadir también en otras franjas» pasa a llamarse «Añadir en varias comidas o días», con textos más claros al elegir dónde repetir lo añadido.
+- Toda la app habla de «comidas» en vez de «franjas» (por ejemplo, «Copiar comida»).
+- Menú: ya no aparece «Revisa los productos y cantidades antes de guardar» por una fila que se dejó sin elegir: esas filas se ignoran al guardar. Si a una receta o un producto elegido le faltan las raciones o la cantidad, el aviso dice cuál es y marca la casilla en rojo, y el aviso ya no se queda en la pantalla del menú al cerrar la ventana.
 
 ## 0.5.5 — 2026-11-25
 
