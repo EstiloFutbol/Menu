@@ -2,6 +2,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { ListPlus, Merge, PackagePlus, Pencil, Search, Trash2, X } from 'lucide-react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -65,6 +66,7 @@ export default function ProductCatalogSection() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useRefreshOnReturn(load)
 
   const filtered = useMemo(() => {
     const value = query.trim().toLowerCase()

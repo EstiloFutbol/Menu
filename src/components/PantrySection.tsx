@@ -7,6 +7,7 @@ import { supabase } from '../lib/supabase'
 import ProductCatalogSection from './ProductCatalogSection'
 import { NumberInput } from './NumberInput'
 import type { PantryNotice } from '../lib/pantry-notice'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -56,6 +57,7 @@ function PantrySection({ notice = null, onDismissNotice }: { notice?: PantryNoti
   }, [])
 
   useEffect(() => { void loadData() }, [loadData])
+  useRefreshOnReturn(loadData)
 
   const visibleItems = useMemo(() => items.filter(shouldShowPantryItem), [items])
   const filteredItems = useMemo(() => {

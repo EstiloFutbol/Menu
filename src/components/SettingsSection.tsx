@@ -7,7 +7,9 @@ import { backupFileName, buildBackup, countRows, EXPORT_TABLES, type ExportRow, 
 import { validateNewPassword } from '../lib/password'
 import { supabase } from '../lib/supabase'
 import ReceiptAliasesCard from './ReceiptAliasesCard'
-import InvitesCard from './InvitesCard'
+import HouseholdSettings from './HouseholdSettings'
+import { useHouseholds } from '../lib/household'
+import { pendingInviteCode } from '../lib/invites'
 import changelogText from '../../CHANGELOG.md?raw'
 import { formatChangelogDate, parseChangelog } from '../lib/changelog'
 
@@ -15,7 +17,10 @@ const changelog = parseChangelog(changelogText)
 const buildDate = new Date(__APP_BUILD_DATE__)
 const builtAt = Number.isNaN(buildDate.getTime()) ? '' : buildDate.toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 
-type Tab = 'cuenta' | 'preferencias'
+type Tab = 'cuenta' | 'hogar' | 'preferencias'
+
+// Pestaña abierta, para no perderla si la sección se vuelve a montar (por ejemplo al cambiar de hogar).
+let lastTab: Tab = 'cuenta'
 type Notice = { kind: 'ok' | 'error'; text: string } | null
 
 const PAGE_SIZE = 1000
@@ -24,7 +29,7 @@ const TABLE_LABELS: Record<string, string> = {
   menu_entries: 'menú', menu_entry_recipes: 'recetas del menú', menu_entry_products: 'productos del menú',
   pantry_items: 'despensa', shopping_lists: 'listas de la compra', shopping_items: 'artículos de la compra',
   purchases: 'compras', purchase_items: 'artículos comprados', consumption_logs: 'consumos', consumption_ingredients: 'ingredientes consumidos',
-  receipt_aliases: 'alias de tickets', user_settings: 'preferencias',
+  receipt_aliases: 'alias de tickets', user_settings: 'preferencias de la cuenta', household_settings: 'preferencias del hogar',
 }
 
 const card = 'rounded-3xl border border-neutral-200 bg-white p-5 shadow-sm'
@@ -76,7 +81,9 @@ function AccountTab() {
         setExportProgress(`Exportando ${TABLE_LABELS[name] ?? name}…`)
         const rows: ExportRow[] = []
         for (let from = 0; ; from += PAGE_SIZE) {
-          const { data, error } = await supabase.from(name).select('*').order(name === 'user_settings' ? 'user_id' : 'id').range(from, from + PAGE_SIZE - 1)
+          const { data, error } = await supabase.from(name).select('*').order(name === 'user_settings' ? 'user_id' : name === 'household_settings' ? 'household_id' : 'id').range(from, from + PAGE_SIZE - 1)
+          // Tabla de una migración todavía sin aplicar: se exporta vacía en vez de fallar.
+          if (error && (error.code === 'PGRST205' || error.code === '42P01')) break
           if (error) throw error
           rows.push(...((data ?? []) as ExportRow[]))
           if (!data || data.length < PAGE_SIZE) break
@@ -158,8 +165,6 @@ function AccountTab() {
         <NoticeText notice={sessionNotice} />
       </section>
 
-      <InvitesCard />
-
       <section className={card}>
         <h2 className="text-base font-semibold">Cambiar contraseña</h2>
         <form onSubmit={changePassword} className="mt-3 space-y-3">
@@ -176,7 +181,7 @@ function AccountTab() {
 
       <section className={card}>
         <h2 className="text-base font-semibold">Copia de seguridad</h2>
-        <p className="mt-2 text-sm text-neutral-500">Descarga un archivo JSON con todos tus datos. No se sube a ningún sitio.</p>
+        <p className="mt-2 text-sm text-neutral-500">Descarga un archivo JSON con todos los datos del hogar que estás viendo. No se sube a ningún sitio.</p>
         <button type="button" onClick={exportData} disabled={exporting} className={`${buttonClass} mt-4`}>{exporting ? 'Exportando…' : 'Descargar mis datos'}</button>
         {exportProgress && <p role="status" className="mt-3 text-sm text-neutral-500">{exportProgress}</p>}
         <NoticeText notice={exportNotice} />
@@ -212,6 +217,7 @@ const MEAL_LABELS: Record<MealId, string> = { desayuno: 'Desayuno', almuerzo: 'A
 
 function PreferencesTab() {
   const { settings, loadError } = useSettings()
+  const { current, version } = useHouseholds()
   const [servings, setServings] = useState(String(settings.defaultServings))
   const [weekStartsOn, setWeekStartsOn] = useState<WeekStart>(settings.weekStartsOn)
   const [meals, setMeals] = useState<MealId[]>(settings.visibleMeals)
@@ -249,6 +255,7 @@ function PreferencesTab() {
     <div className="space-y-4">
     <section className={card}>
       <h2 className="text-base font-semibold">Planificación</h2>
+      <p className="mt-1 text-sm text-neutral-500">Son del hogar: valen para todas las personas de «{current?.name ?? 'tu hogar'}».</p>
       {loadError && <p role="alert" className="mt-2 text-sm text-red-600">{loadError}</p>}
       <form onSubmit={save} className="mt-3 space-y-4">
         <label className="block text-sm text-neutral-600">Raciones por defecto
@@ -262,7 +269,7 @@ function PreferencesTab() {
           </div>
         </fieldset>
         <fieldset>
-          <legend className="text-sm text-neutral-600">Franjas que se muestran en el menú</legend>
+          <legend className="text-sm text-neutral-600">Comidas que se muestran en el menú</legend>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
             {MEAL_IDS.map((id) => <label key={id} className="flex items-center gap-2"><input type="checkbox" checked={meals.includes(id)} onChange={() => toggleMeal(id)} /> {MEAL_LABELS[id]}</label>)}
           </div>
@@ -272,14 +279,16 @@ function PreferencesTab() {
       </form>
       <NoticeText notice={notice} />
     </section>
-    <ReceiptAliasesCard />
+    <ReceiptAliasesCard key={version} />
     </div>
   )
 }
 
 function SettingsSection() {
-  const [tab, setTab] = useState<Tab>('cuenta')
-  const tabs: Array<{ id: Tab; label: string }> = [{ id: 'cuenta', label: 'Cuenta' }, { id: 'preferencias', label: 'Preferencias' }]
+  // Con un enlace de invitación pendiente se abre directamente «Hogar» para unirse.
+  const [tab, setTabState] = useState<Tab>(() => (pendingInviteCode() ? 'hogar' : lastTab))
+  const setTab = (next: Tab) => { lastTab = next; setTabState(next) }
+  const tabs: Array<{ id: Tab; label: string }> = [{ id: 'cuenta', label: 'Cuenta' }, { id: 'hogar', label: 'Hogar' }, { id: 'preferencias', label: 'Preferencias' }]
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -290,7 +299,7 @@ function SettingsSection() {
         ))}
       </div>
       <div className="mt-4">
-        {tab === 'cuenta' ? <AccountTab /> : <PreferencesTab />}
+        {tab === 'cuenta' ? <AccountTab /> : tab === 'hogar' ? <HouseholdSettings /> : <PreferencesTab />}
       </div>
     </div>
   )

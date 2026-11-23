@@ -31,3 +31,11 @@ describe('errores al fusionar productos', () => {
     expect(friendlyError({ message: 'Merge conflict in menu', code: 'P0001' }, 'x')).toMatch(/misma comida del menú/)
   })
 })
+
+describe('errores del hogar', () => {
+  it('explica por qué no se puede', () => {
+    expect(friendlyError({ message: 'Cannot leave the personal household', code: 'P0001' }, 'x')).toMatch(/hogar personal no se puede dejar/)
+    expect(friendlyError({ message: 'Invalid invite code', code: 'P0001' }, 'x')).toMatch(/no es válido/)
+    expect(friendlyError({ message: 'Only the household owner can invite', code: 'P0001' }, 'x')).toMatch(/responsable/)
+  })
+})

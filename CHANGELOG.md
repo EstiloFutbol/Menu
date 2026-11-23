@@ -6,6 +6,18 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.0 — 2026-11-23
+
+- Modo hogar: ya puedes compartir el menú, las recetas, la compra, la despensa y los tickets con otras personas. Está en la nueva pestaña Ajustes → Hogar.
+- Invitar: al crear una invitación eliges si es a tu hogar (compartiréis todo) o solo a la app (tendrá su propio hogar). Quien crea su cuenta con una invitación a tu hogar entra directamente en él.
+- Si ya tienes cuenta, te unes a un hogar en Ajustes → Hogar → «Unirme a un hogar». Al abrir un enlace de invitación con la sesión iniciada, el código ya aparece escrito.
+- Nunca se pierde nada: tus datos siguen en tu hogar personal. En «Tus hogares» puedes cambiar de uno a otro cuando quieras.
+- Al salir de un hogar puedes llevarte una copia de tus recetas y compras a tu hogar personal. Lo que añadiste se queda también en el hogar para los demás.
+- El responsable del hogar puede cambiarle el nombre y quitar a alguien (no se borra nada de lo que añadió).
+- Las preferencias de planificación (raciones, inicio de semana y comidas visibles) pasan a ser del hogar: valen para todas las personas que están en él.
+- Al volver a la app tras un rato fuera, se recargan los datos para ver lo que hayan cambiado los demás.
+- Las invitaciones se mueven de Ajustes → Cuenta a Ajustes → Hogar.
+
 ## 0.5.9 — 2026-11-23
 
 - Preparación del modo hogar: tus datos pasan a guardarse en tu «hogar» en vez de en tu cuenta. Por ahora no cambia nada de lo que ves; es la base para poder compartir despensa, menú y compra en la próxima versión.

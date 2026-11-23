@@ -3,6 +3,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -159,6 +160,7 @@ export default function PurchaseHistorySection() {
   }, [])
 
   useEffect(() => { void load() }, [load])
+  useRefreshOnReturn(load)
 
   const totals = useMemo(() => {
     const spent = purchases.reduce((sum, purchase) => sum + Number(purchase.total_amount), 0)
