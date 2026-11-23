@@ -6,35 +6,39 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
-## 0.5.6 — 2026-11-25
+## 0.5.7 — 2026-11-23
+
+- Novedades: corregidas las fechas de las versiones 0.5.1 a 0.5.6, que salían adelantadas.
+
+## 0.5.6 — 2026-11-23
 
 - Menú: «Añadir también en otras franjas» pasa a llamarse «Añadir en varias comidas o días», con textos más claros al elegir dónde repetir lo añadido.
 - Toda la app habla de «comidas» en vez de «franjas» (por ejemplo, «Copiar comida»).
 - Menú: «Añadir en varias comidas o días» está siempre disponible al abrir una comida con algo planificado y repite todo lo que hay en ella, como pendiente. Se quita el botón «Copiar a…», que hacía lo mismo.
 - Menú: ya no aparece «Revisa los productos y cantidades antes de guardar» por una fila que se dejó sin elegir: esas filas se ignoran al guardar. Si a una receta o un producto elegido le faltan las raciones o la cantidad, el aviso dice cuál es y marca la casilla en rojo, y el aviso ya no se queda en la pantalla del menú al cerrar la ventana.
 
-## 0.5.5 — 2026-11-25
+## 0.5.5 — 2026-11-22
 
 - Tickets en foto: la app busca el ticket en la foto, lo recorta y lo endereza (también si está en perspectiva) antes de leerlo, así el texto se lee más grande y recto. Además lee una versión enfocada de la imagen.
 - Tickets en foto: cada precio se decide por mayoría entre las distintas lecturas. El total del ticket solo se usa para desempatar, así no se dan por buenos precios mal leídos que cuadran por casualidad.
 - Tickets de Mercadona: ya no aparece un «1» de más delante de algunos nombres.
 
-## 0.5.4 — 2026-11-25
+## 0.5.4 — 2026-11-22
 
 - Menú: nuevo botón «Copiar semana» para copiar toda la planificación de la semana que estás viendo a otra (por defecto, la siguiente). Si la otra semana ya tiene cosas, eliges entre añadir a lo que hay o sustituir lo pendiente (lo ya consumido se conserva). Todo se copia como pendiente.
 
-## 0.5.3 — 2026-11-24
+## 0.5.3 — 2026-11-22
 
 - Tickets: si sales de la revisión de un ticket a medias (cambiando de sección, de pestaña en Compra, pulsando «Otro ticket» o cerrando la página), la app pregunta si quieres añadirlo a la despensa, salir sin guardar o seguir revisando.
 
-## 0.5.2 — 2026-11-24
+## 0.5.2 — 2026-11-22
 
 - Menú: al añadir un producto a una franja ya no solo salen los de la despensa: después aparece el resto del catálogo (irá a la lista de la compra) y la opción «+ Crear producto nuevo…» para crearlo ahí mismo.
 - Menú (móvil): en cada producto de una franja, el nombre ocupa toda la fila y la cantidad y la unidad van debajo, para que se lea bien.
 - Productos básicos: las cuentas empiezan con unos 120 productos habituales (arroz, huevos, tomate, aceite, pollo…) para no crear el catálogo desde cero. Nunca se duplican los que ya tienes. En Despensa → Productos, «Añadir productos básicos» añade los que falten.
 - Recetas: si sales de una receta a medias (cambiando de sección, con la flecha de volver o cerrando la página), la app pregunta si quieres guardarla, salir sin guardar o seguir editando.
 
-## 0.5.1 — 2026-11-23
+## 0.5.1 — 2026-11-22
 
 - Menú: ya se puede deshacer una receta o un producto marcado como consumido (botón «Deshacer» o ↺ al abrir la franja). Vuelve a quedar pendiente y se devuelve a la despensa exactamente lo que se descontó; si no se descontó nada, no se devuelve nada.
 - Despensa: al consumir, si había menos de lo necesario, se apunta lo que de verdad se quitó para poder devolverlo bien.
