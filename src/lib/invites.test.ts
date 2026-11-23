@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatInviteCode, inviteCodeFromUrl, inviteLink, inviteStatus, normalizeInviteCode, type AppInvite } from './invites'
+import { formatInviteCode, inviteCodeFromUrl, inviteLink, inviteShareText, inviteStatus, normalizeInviteCode, type AppInvite } from './invites'
 
 const invite = (patch: Partial<AppInvite> = {}): AppInvite => ({
   code: 'K7MQ2PXA', created_at: '2026-11-23T10:00:00Z', expires_at: '2026-11-30T10:00:00Z', revoked_at: null, used_email: null, used_at: null, ...patch,
@@ -24,5 +24,12 @@ describe('invitaciones', () => {
     expect(link).toBe('https://estilofutbol.github.io/Menu/?invitacion=K7MQ2PXA')
     expect(inviteCodeFromUrl(link)).toBe('K7MQ2PXA')
     expect(inviteCodeFromUrl('https://estilofutbol.github.io/Menu/')).toBeNull()
+  })
+
+  it('el mensaje para compartir dice a qué se invita', () => {
+    expect(inviteShareText('k7mq2pxa')).toMatch(/Te invito a Menu.*K7MQ-2PXA/)
+    const household = inviteShareText('K7MQ2PXA', 'Casa')
+    expect(household).toMatch(/mi hogar «Casa».*K7MQ-2PXA/)
+    expect(household).toMatch(/Unirme a un hogar/)
   })
 })

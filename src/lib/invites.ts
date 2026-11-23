@@ -1,7 +1,12 @@
 // Invitaciones a la app: solo se puede crear una cuenta con el código de alguien
 // que ya la usa (la base de datos rechaza las altas sin código válido).
+export type InviteKind = 'app' | 'household'
+
 export type AppInvite = {
   code: string
+  kind?: InviteKind
+  household_id?: string | null
+  household?: { name: string } | null
   created_at: string
   expires_at: string
   revoked_at: string | null
@@ -40,4 +45,28 @@ export function inviteLink(code: string, appUrl: string) {
 export function inviteCodeFromUrl(href: string) {
   const code = new URL(href).searchParams.get('invitacion')
   return code ? normalizeInviteCode(code) : null
+}
+
+// Enlace de invitación abierto con la sesión ya iniciada: el código se guarda para
+// ofrecer «Unirme a un hogar» con él escrito.
+const PENDING_KEY = 'menu:invitacion'
+
+export function savePendingInviteCode(code: string) {
+  try { window.sessionStorage.setItem(PENDING_KEY, normalizeInviteCode(code)) } catch { /* sin almacenamiento: se escribe a mano */ }
+}
+
+export function pendingInviteCode(): string | null {
+  try { return window.sessionStorage.getItem(PENDING_KEY) } catch { return null }
+}
+
+export function clearPendingInviteCode() {
+  try { window.sessionStorage.removeItem(PENDING_KEY) } catch { /* nada que limpiar */ }
+}
+
+// Texto para compartir la invitación por mensaje.
+export function inviteShareText(code: string, householdName?: string | null) {
+  const formatted = formatInviteCode(code)
+  return householdName
+    ? `Te invito a mi hogar «${householdName}» en Menu, para compartir el menú, la compra y la despensa. Tu código es ${formatted}. Si aún no tienes cuenta, créala con el enlace; si ya la tienes, ve a Ajustes → Hogar → Unirme a un hogar.`
+    : `Te invito a Menu, la app para planificar el menú, la compra y la despensa. Tu código de invitación es ${formatted}.`
 }

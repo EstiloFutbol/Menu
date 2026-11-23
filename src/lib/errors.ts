@@ -44,6 +44,16 @@ const knownMessages: Record<string, string> = {
   'Database error saving new user': 'El código de invitación no es válido, ha caducado o ya se usó.',
   'Signups not allowed for this instance': 'Ahora mismo no se pueden crear cuentas nuevas.',
   'User already registered': 'Ya existe una cuenta con ese correo. Entra con tu contraseña.',
+  'Invalid invite kind': 'Ese tipo de invitación no existe.',
+  'Only the household owner can invite': 'Solo el responsable del hogar puede invitar a otras personas a él.',
+  'Invalid invite code': 'El código no es válido, ha caducado o ya se usó. Pide una invitación nueva.',
+  'Already a member': 'Ya estás en ese hogar. Puedes cambiar a él en «Tus hogares».',
+  'Not a member of this household': 'Ya no estás en ese hogar.',
+  'Cannot leave the personal household': 'Tu hogar personal no se puede dejar: siempre es tuyo.',
+  'Only the household owner can remove members': 'Solo el responsable del hogar puede quitar a alguien.',
+  'Use leave_household to leave': 'Para irte del hogar usa «Salir del hogar».',
+  'Only the household owner can rename it': 'Solo el responsable puede cambiar el nombre del hogar.',
+  'Invalid household name': 'El nombre del hogar debe tener entre 1 y 80 caracteres.',
   'Slot has consumption': 'No puedes convertir en “Comida fuera” una comida que ya tiene algo consumido.',
 }
 

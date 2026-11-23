@@ -1,6 +1,12 @@
 # Plan: modo hogar (familiar) y modo sencillo
 
-Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
+Estado: **fases 1 y 2 hechas** (versiones 0.5.9 y 0.6.0). Quedan la fase 3 (modo sencillo) y la 4 (cambios en vivo).
+
+Diferencias con lo previsto al hacer la fase 2:
+- Las invitaciones a un hogar reutilizan `app_invites` (`kind = 'household'` y `household_id`), no una tabla `household_invites` aparte.
+- No se crean hogares nuevos: para compartir, el responsable invita a su hogar personal. Quien se une puede salir; el dueño del hogar personal no.
+- La copia al salir incluye también las traducciones de tickets. Las compras copiadas no tocan la despensa.
+- Al volver a la app tras más de un minuto fuera, las secciones abiertas se recargan si no hay cambios sin guardar. No hay botón de recargar: también se recarga al abrir cada sección.
 
 ## Decisiones tomadas
 

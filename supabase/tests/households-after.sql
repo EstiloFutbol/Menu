@@ -24,6 +24,14 @@ begin
   end loop;
 end $$;
 
+-- Las preferencias de Ana pasan a su hogar personal (fase 2); las de user_settings siguen ahí.
+do $$ begin
+  assert (select count(*) from public.household_settings hs join public.households h on h.id = hs.household_id
+          where h.personal_for = '00000000-0000-0000-0000-00000000000a' and hs.default_servings = 3 and hs.week_starts_on = 0) = 1,
+    'las preferencias de Ana no pasaron a su hogar';
+  assert (select default_servings from public.user_settings where user_id = '00000000-0000-0000-0000-00000000000a') = 3, 'se tocaron las preferencias de la cuenta';
+end $$;
+
 -- 3. Cada cuenta ve exactamente lo suyo.
 set role authenticated;
 set request.jwt.claim.sub = '00000000-0000-0000-0000-00000000000a';

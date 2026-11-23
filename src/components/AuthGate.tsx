@@ -3,7 +3,7 @@ import { LockKeyhole, MailCheck } from 'lucide-react'
 import { type FormEvent, type ReactNode, useEffect, useState } from 'react'
 import { isSupabaseConfigured, supabase } from '../lib/supabase'
 import { friendlyError } from '../lib/errors'
-import { formatInviteCode, inviteCodeFromUrl, normalizeInviteCode } from '../lib/invites'
+import { clearPendingInviteCode, formatInviteCode, inviteCodeFromUrl, normalizeInviteCode, savePendingInviteCode } from '../lib/invites'
 import { validateNewPassword } from '../lib/password'
 
 export function AuthGate({ children }: { children: ReactNode }) {
@@ -22,7 +22,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Se quita el código de la barra de direcciones para que no se quede en el historial.
+    // Si ya tiene cuenta, el código se guarda para ofrecerle unirse al hogar desde Ajustes → Hogar.
     const url = new URL(window.location.href)
+    const code = inviteCodeFromUrl(url.toString())
+    if (code) savePendingInviteCode(code)
     if (url.searchParams.has('invitacion')) {
       url.searchParams.delete('invitacion')
       window.history.replaceState(null, '', url.toString())
@@ -88,6 +91,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
     })
     setSubmitting(false)
     if (signupError) { setError(friendlyError(signupError, 'No se pudo crear la cuenta.')); return }
+    // El código ya está usado: no hay que ofrecer unirse con él al entrar.
+    clearPendingInviteCode()
     // Con la confirmación por correo activada no hay sesión todavía: hay que confirmar el correo.
     if (!data.session) setSignupEmail(email)
   }

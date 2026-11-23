@@ -45,12 +45,14 @@ export function loadSettings(force = false): Promise<void> {
   if (loading) return loading
   loading = (async () => {
     try {
-      const { data, error } = await supabase!.from('user_settings').select('default_servings,week_starts_on,visible_meals').maybeSingle()
+      // Las preferencias son del hogar que se está viendo (las políticas solo dejan ver esa fila).
+      const { data, error } = await supabase!.from('household_settings').select('default_servings,week_starts_on,visible_meals').maybeSingle()
       if (error) throw error
       loaded = true
       setState({ settings: settingsFromRow(data), loadError: '' })
     } catch (cause) {
-      setState({ settings: state.settings, loadError: friendlyError(cause, 'No se han podido cargar las preferencias.') })
+      const missing = /household_settings/.test(String((cause as { message?: string })?.message))
+      setState({ settings: state.settings, loadError: missing ? 'Falta aplicar en Supabase la migración 20261126000100_household_sharing.sql.' : friendlyError(cause, 'No se han podido cargar las preferencias.') })
     } finally { loading = null }
   })()
   return loading
@@ -58,11 +60,11 @@ export function loadSettings(force = false): Promise<void> {
 
 export async function saveSettings(next: UserSettings): Promise<void> {
   if (!supabase) return
-  const { data: sessionData } = await supabase.auth.getSession()
-  const userId = sessionData.session?.user.id
-  if (!userId) throw new Error('No hay sesión iniciada.')
-  const { error } = await supabase.from('user_settings').upsert({
-    user_id: userId,
+  const { data: householdId, error: householdError } = await supabase.rpc('current_household_id')
+  if (householdError) throw householdError
+  if (!householdId) throw new Error('No hay sesión iniciada.')
+  const { error } = await supabase.from('household_settings').upsert({
+    household_id: householdId,
     default_servings: next.defaultServings,
     week_starts_on: next.weekStartsOn,
     visible_meals: next.visibleMeals,

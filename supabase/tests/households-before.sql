@@ -21,6 +21,8 @@ select public.import_reviewed_receipt('Mercadona', now(), 3.5,
   '[{"raw_name":"PAN","canonical_name":"Pan","normalized_name":"pan","ingredient_id":null,"category":"Panadería","quantity":1,"unit":"unidad","total_price":1.2,"add_to_pantry":true},
     {"raw_name":"LECHE ENTERA","canonical_name":"Leche entera","normalized_name":"leche entera","ingredient_id":null,"category":"Lácteos y huevos","quantity":1,"unit":"l","total_price":2.3,"add_to_pantry":true}]');
 select public.regenerate_shopping_list('2026-11-23', (select jsonb_build_array(jsonb_build_object('ingredient_id', id, 'quantity', 1, 'unit', 'unidad')) from public.ingredients where name = 'Huevos'));
+-- Sus preferencias (pasan a ser las de su hogar en la fase 2).
+insert into public.user_settings (user_id, default_servings, week_starts_on) values (auth.uid(), 3, 0);
 reset role;
 
 -- Beto: una receta y su despensa.

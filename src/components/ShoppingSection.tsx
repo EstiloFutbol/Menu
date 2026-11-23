@@ -6,6 +6,7 @@ import { friendlyError } from '../lib/errors'
 import { useSettings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -118,6 +119,7 @@ function ShoppingSection() {
   useEffect(() => {
     void loadList()
   }, [loadList])
+  useRefreshOnReturn(loadList)
 
   useEffect(() => {
     if (!supabase) return

@@ -1,4 +1,4 @@
-import { CalendarDays, ChefHat, PackageOpen, Settings, ShoppingBasket } from 'lucide-react'
+import { CalendarDays, ChefHat, Home, PackageOpen, Settings, ShoppingBasket } from 'lucide-react'
 import { useState } from 'react'
 import MenuSection from './components/MenuSection'
 import PantrySection from './components/PantrySection'
@@ -8,6 +8,8 @@ import SettingsSection from './components/SettingsSection'
 import type { PantryNotice } from './lib/pantry-notice'
 import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from './lib/leave-guard'
 import { UnsavedChangesDialog } from './components/UnsavedChangesDialog'
+import { useHouseholds } from './lib/household'
+import { pendingInviteCode } from './lib/invites'
 
 type Section = 'menu' | 'recetas' | 'compra' | 'despensa' | 'ajustes'
 
@@ -20,7 +22,10 @@ const sections: Array<{ id: Section; label: string; icon: typeof CalendarDays }>
 ]
 
 function App() {
-  const [section, setSectionState] = useState<Section>('menu')
+  // Con un enlace de invitación pendiente se abre Ajustes → Hogar para unirse.
+  const [section, setSectionState] = useState<Section>(() => (pendingInviteCode() ? 'ajustes' : 'menu'))
+  // Al cambiar de hogar cambia `version` y las secciones se vuelven a cargar con sus datos.
+  const { current, households, version } = useHouseholds()
   // Aviso para la despensa tras importar un ticket; se quita al cambiar de sección.
   const [pantryNotice, setPantryNotice] = useState<PantryNotice | null>(null)
 
@@ -58,7 +63,7 @@ function App() {
         <aside className="sticky top-0 hidden h-screen w-60 shrink-0 overflow-y-auto border-r border-neutral-200 px-5 py-7 lg:block">
           <div className="px-2">
             <p className="text-xl font-semibold tracking-tight">Menu</p>
-            <p className="mt-1 text-xs text-neutral-400">Planificación personal</p>
+            <p className="mt-1 truncate text-xs text-neutral-400" title={current?.name}>{current && (households.length > 1 || current.memberCount > 1) ? current.name : 'Planificación personal'}</p>
           </div>
           <nav className="mt-8 space-y-1">
             {sections.map(({ id, label, icon: Icon }) => {
@@ -70,10 +75,12 @@ function App() {
         {/* Ocupa todo el ancho disponible; solo en pantallas muy anchas se limita para que no se estire de más. */}
         <main className="min-w-0 flex-1 px-4 pb-10 pt-5 sm:px-6 lg:px-10 lg:pt-9">
           <div className="mx-auto w-full max-w-[1800px]">
-            {section === 'menu' && <MenuSection />}
-            {section === 'recetas' && <RecipesSection />}
-            {section === 'compra' && <PurchaseAreaSection onReceiptImported={showImportedInPantry} />}
-            {section === 'despensa' && <PantrySection notice={pantryNotice} onDismissNotice={() => setPantryNotice(null)} />}
+            {/* En el móvil no hay barra lateral: si tiene varios hogares, se indica cuál está viendo. */}
+            {current && households.length > 1 && section !== 'ajustes' && <button type="button" onClick={() => setSection('ajustes')} className="mb-3 flex max-w-full items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-medium text-neutral-600 lg:hidden"><Home size={13} /><span className="truncate">{current.name}</span></button>}
+            {section === 'menu' && <MenuSection key={version} />}
+            {section === 'recetas' && <RecipesSection key={version} />}
+            {section === 'compra' && <PurchaseAreaSection key={version} onReceiptImported={showImportedInPantry} />}
+            {section === 'despensa' && <PantrySection key={version} notice={pantryNotice} onDismissNotice={() => setPantryNotice(null)} />}
             {section === 'ajustes' && <SettingsSection />}
           </div>
         </main>

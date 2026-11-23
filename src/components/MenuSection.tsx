@@ -11,6 +11,7 @@ import { supabase } from '../lib/supabase'
 import CompleteProductModal from './CompleteProductModal'
 import CompleteRecipeModal from './CompleteRecipeModal'
 import { NumberInput } from './NumberInput'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const mealTypes = [
   { id: 'desayuno', label: 'Desayuno' },
@@ -144,6 +145,8 @@ export default function MenuSection() {
 
   useEffect(() => { void loadRecipes().catch((cause) => setError(friendlyError(cause, 'No se pudieron cargar las recetas.'))); void loadIngredients().catch((cause) => setError(friendlyError(cause, 'No se pudieron cargar los productos.'))); void loadPantry().catch((cause) => setError(friendlyError(cause, 'No se pudo cargar la despensa.'))) }, [loadRecipes, loadIngredients, loadPantry])
   useEffect(() => { void loadWeek() }, [loadWeek])
+  // Al volver a la app se recarga (otra persona del hogar puede haber cambiado el menú).
+  useRefreshOnReturn(() => Promise.all([loadWeek(), loadPantry(), loadRecipes(), loadIngredients()]))
 
   const closeDraft = () => { setDraft(null); setError('') }
 

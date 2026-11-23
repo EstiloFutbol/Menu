@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 import { setLeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
+import { useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = [
@@ -295,6 +296,7 @@ export default function RecipesSection() {
   }, [])
 
   useEffect(() => { void loadData() }, [loadData])
+  useRefreshOnReturn(loadData)
 
   const filteredRecipes = recipes.filter((recipe) => recipe.name.toLocaleLowerCase('es').includes(search.toLocaleLowerCase('es')))
 

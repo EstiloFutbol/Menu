@@ -212,12 +212,22 @@ La migración `20261125000300_households.sql` es la **fase 1 del modo hogar** (v
 - Cada cuenta nueva recibe su hogar personal con los productos básicos.
 - Por fuera no cambia nada. **Antes de aplicarla en Supabase, descarga la copia de seguridad de cada cuenta** (Ajustes → Copia de seguridad).
 
+La migración `20261126000100_household_sharing.sql` es la **fase 2 del modo hogar**: compartir el hogar con otras cuentas.
+- Invitaciones a un hogar: `create_app_invite('household')` crea un código para el hogar actual (solo su responsable). Con `create_app_invite()` o `'app'`, la cuenta nueva solo tiene su hogar personal. `app_invites.household_id` dice a qué hogar invita.
+- Quien crea su cuenta con una invitación a un hogar entra directamente en él. Quien ya tiene cuenta se une con `join_household(código)`.
+- `switch_household(id)` cambia el hogar que se ve; `my_households()` y `household_member_list(id)` dan los datos de Ajustes → Hogar.
+- `leave_household(id, copiar)` sale de un hogar (nunca del personal). Con `copiar`, antes lleva al hogar personal las recetas, compras y traducciones de tickets que añadió esa persona, con sus productos y sin repetirlos (`copy_my_data_to_personal`). Las compras copiadas no tocan la despensa.
+- `remove_household_member(hogar, persona)` y `rename_household(hogar, nombre)`, solo para el responsable. Si sale el responsable de un hogar que no es personal, pasa a serlo quien lleve más tiempo.
+- **Ninguna función borra datos**: lo que alguien añadió se queda en el hogar para los demás.
+- Las preferencias de planificación pasan a `household_settings` (una fila por hogar), copiadas de las de cada cuenta. `user_settings` se queda con el hogar activo y conserva sus columnas antiguas.
+
 ### Probar las migraciones
 
 `npm run test:db` levanta un PostgreSQL 16 temporal (necesita `initdb`, `pg_ctl` y `psql`; ruta configurable con `PG_BIN`) y hace lo siguiente:
 1. Aplica las migraciones anteriores al hogar y crea datos de dos cuentas con `supabase/tests/households-before.sql`.
 2. Aplica la migración del hogar y el resto.
 3. Ejecuta las comprobaciones de `supabase/tests/households-after.sql`: no se pierde ninguna fila, cada hogar ve solo lo suyo, todas las funciones siguen funcionando, hogar compartido, cuentas nuevas y borrado de cuentas.
+4. En otra base de datos vacía aplica todas las migraciones y ejecuta `supabase/tests/household-sharing.sql`: invitar, unirse, cambiar de hogar, salir con y sin copia, quitar a alguien, cuentas nuevas con invitación y que nada de eso baje el número de filas de ninguna tabla.
 
 ### Preparación de las fotos de tickets
 
