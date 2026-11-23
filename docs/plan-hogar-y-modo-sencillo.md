@@ -1,0 +1,145 @@
+# Plan: modo hogar (familiar) y modo sencillo
+
+Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
+
+## Decisiones tomadas
+
+| Pregunta | Decisión |
+|---|---|
+| ¿Cómo acceden las personas del hogar? | **Hogar con cuentas.** Cada persona entra con su cuenta y se une al hogar con una invitación. |
+| ¿Qué se comparte? | **Todo**: despensa, menú, lista de la compra, recetas, productos, tickets e historial. |
+| ¿Cómo se elige sencillo o completo? | **Un interruptor para toda la app**, en Ajustes. |
+| ¿Cómo se escribe el menú en modo sencillo? | **Un texto por día.** |
+
+## En resumen (para quien usa la app)
+
+**Hogar**
+- En **Ajustes → Hogar** cada cuenta ve su hogar: el nombre, quién está y un botón **«Invitar»**.
+- **Invitar** genera un código corto (por ejemplo `K7M-Q2PX`), que caduca a los 7 días y sirve para una persona.
+- La otra persona entra con su cuenta, va a **Ajustes → Hogar → «Unirme a un hogar»** y escribe el código.
+- Desde ese momento los dos ven y editan **lo mismo**: si uno marca algo como comprado o consume una receta, el otro lo ve.
+- Quien crea el hogar es su **responsable**: puede invitar, quitar personas y cambiarle el nombre. Cualquiera puede **salir** del hogar.
+- Los datos de cada uno no se pierden al unirse a otro hogar: se quedan guardados en su **hogar personal**, y vuelve a ellos si sale.
+
+**Modo sencillo**
+- En **Ajustes** se elige **Sencillo** o **Completo**. El modo es del hogar: todos ven la app igual.
+- En **sencillo**, la app tiene solo tres secciones:
+  - **Menú**: la semana con un cuadro de texto por día («Lunes: lentejas y fruta; cena: tortilla»). Se guarda solo mientras escribes y se puede cambiar de semana y copiar la semana a la siguiente.
+  - **Compra**: una lista escrita por ti, una cosa por línea, con casilla para marcar lo comprado. Puedes pegar varias líneas de golpe y **«Quitar lo comprado»** limpia la lista.
+  - **Ajustes**.
+- Al pasar a **completo** no se pierde nada: los textos del menú se ven como **nota de cada día** y la lista sencilla aparece en Compra como **«Apuntado a mano»**. Al volver a sencillo, lo escrito sigue ahí.
+
+## Cómo está hoy (punto de partida)
+
+- Cada dato pertenece a **un usuario** (`user_id`). La seguridad de Supabase (RLS) solo deja ver las filas con `user_id = auth.uid()`.
+- **9 tablas** guardan el dueño: `ingredients`, `recipes`, `menu_entries`, `pantry_items`, `shopping_lists`, `purchases`, `consumption_logs`, `receipt_aliases` y `user_settings`. El resto (pasos de receta, filas del menú, líneas de ticket…) cuelga de ellas.
+- **16 funciones SQL** comprueban el dueño con `auth.uid()`:
+  - `add_basic_ingredients`, `add_to_menu_slots`, `complete_planned_product`, `complete_planned_recipe`, `copy_menu_week`;
+  - `delete_purchase_and_reverse_pantry`, `delete_purchase_item_and_reverse_pantry`, `delete_unused_ingredient`;
+  - `import_reviewed_receipt`, `merge_ingredients`, `refresh_menu_entry_completion`, `regenerate_shopping_list`;
+  - `reverse_purchase_item_pantry_effect`, `save_menu_slot`, `save_recipe`, `undo_consumption`.
+- La app no tiene pantalla de registro: las cuentas se crean en Supabase.
+
+## Diseño técnico
+
+### Hogar
+
+**Tablas nuevas**
+- `households`: `id`, `name`, `created_by`, `created_at`.
+- `household_members`: `household_id`, `user_id`, `role` (`owner` | `member`), `joined_at`. Clave `(household_id, user_id)`.
+- `household_invites`: `code` (8 caracteres sin ambiguos: sin 0/O ni 1/I), `household_id`, `created_by`, `expires_at`, `used_by`, `used_at`.
+- `household_settings`: las preferencias que hoy están en `user_settings` y afectan a todos (raciones por defecto, inicio de semana, comidas visibles) más el nuevo `mode` (`sencillo` | `completo`).
+- `user_settings` se queda con lo personal: el **hogar activo** (`active_household_id`).
+
+**El «hogar actual»**
+- `current_household_id()` devuelve el hogar activo del usuario si sigue siendo miembro; si no, su hogar personal.
+- Es la pieza central: las políticas y funciones dejan de mirar `auth.uid()` y miran el hogar.
+
+**Las 8 tablas de datos**
+- Columna nueva `household_id not null default current_household_id()`. Se rellena a partir de `user_id`, porque cada usuario tiene ya su hogar personal.
+- `user_id` se mantiene como **«quién lo hizo»** (autor del ticket, del consumo…). Sirve para mostrar «Lo compró Ana».
+- Las restricciones únicas pasan de `user_id` a `household_id`:
+  - productos por nombre;
+  - una fila de despensa por producto;
+  - una entrada de menú por día y comida;
+  - una lista por semana;
+  - una traducción de ticket por nombre.
+- Las políticas RLS pasan a `household_id = current_household_id()`. Las tablas hijas comprueban el hogar de su tabla padre, igual que hoy comprueban el usuario.
+
+**Las 16 funciones**
+- Se reescriben cambiando el filtro de usuario por el de hogar.
+- Las firmas no cambian, así que **la app apenas cambia**: los `insert` que hoy envían `user_id` siguen funcionando, porque el hogar se rellena solo.
+
+**Cuentas nuevas**
+- El trigger de alta crea el hogar personal («Hogar de ana@…»), la membresía como responsable y los productos básicos del hogar.
+
+**Funciones de gestión**
+- `create_household_invite()`, `join_household(code)`, `leave_household()`, `remove_member(user_id)` y `rename_household(name)`.
+- Todas en una transacción y comprobando el rol.
+
+**Al unirse a un hogar**
+- Se cambia el hogar activo. Los datos propios quedan intactos en el hogar personal.
+- Más adelante, si hace falta: «Llevar mis recetas al hogar» (copiar recetas y productos, reutilizando la lógica de `merge_ingredients` para no duplicar).
+
+### Modo sencillo
+
+**Tablas nuevas** (las dos con `household_id`, RLS por hogar y autor `user_id`)
+- `menu_day_notes`: `household_id`, `day` (fecha), `text`, `updated_by`, `updated_at`. Única por `(household_id, day)`.
+- `quick_list_items`: `household_id`, `text`, `checked`, `position`, `created_by`.
+
+**Interruptor**: `household_settings.mode`. `App.tsx` elige qué secciones mostrar según el modo.
+
+**Pantallas nuevas**
+- `SimpleMenuSection`: navegación de semana (la misma de hoy), 7 cuadros de texto con guardado automático (unos 600 ms después de dejar de escribir) y «Copiar semana».
+- `SimpleShoppingSection`:
+  - campo para añadir; pegar varias líneas crea varias cosas;
+  - casillas para marcar;
+  - mover de orden;
+  - «Quitar lo comprado».
+
+**En modo completo**
+- La nota del día aparece encima del día en el menú.
+- Los apuntes sencillos aparecen como bloque en Lista de la compra.
+
+### Ver los cambios de los demás
+
+Con un hogar compartido, la lista y el menú tienen que actualizarse cuando otro los cambia:
+- **Fase base**: recargar al volver a la app o a la pestaña (`visibilitychange`), al abrir cada sección y con un botón de recargar.
+- **Después**: Supabase Realtime en la lista de la compra, el menú y la despensa, para verlo al instante.
+
+## Plan por fases
+
+Cada fase es una PR, o un par de ellas, con su migración probada en PostgreSQL local con varios usuarios y hogares, sus tests y su versión.
+
+| Fase | Qué incluye | Qué ve el usuario |
+|---|---|---|
+| **1. Base del hogar** | Tablas de hogar. `household_id` en las 8 tablas. Políticas y 16 funciones por hogar. Hogar personal para las 3 cuentas actuales. Ajustes de planificación pasan al hogar. | Nada cambia. Es la más delicada: toca todas las tablas. |
+| **2. Invitar y gestionar** | Ajustes → Hogar: nombre, miembros, invitar con código, unirse, salir, quitar a alguien. Recarga al volver a la app. | Ya se puede compartir todo con otra cuenta. |
+| **3. Modo sencillo** | Tablas de notas del día y lista sencilla, interruptor en Ajustes, pantallas de menú y compra sencillos, y cómo se ven en modo completo. | El modo sencillo completo. |
+| **4. En vivo y autoría** | Supabase Realtime en lista, menú y despensa. «Lo hizo Ana» en tickets y consumos. | Los cambios del otro aparecen al momento. |
+
+Recomiendo este orden. El modo sencillo se apoya en el hogar desde el principio (sus tablas nacen con `household_id`), así no hay que migrarlo después.
+
+El modo sencillo **también podría ir primero**, porque es más corto y no toca lo existente. Pero entonces sus dos tablas tendrían que pasar después por la migración del hogar.
+
+## Cómo se prueba
+
+- **Base de datos**: todas las migraciones aplicadas en PostgreSQL 16 local con varias cuentas.
+  - Lo de un hogar **no se ve ni se toca** desde otro: lectura, escritura y cada una de las funciones.
+  - Dos miembros del mismo hogar ven y cambian lo mismo.
+  - Un código caducado o ya usado no sirve.
+  - Al salir del hogar se vuelve al personal con los datos intactos.
+- **App**: tests de la lógica nueva y pruebas en navegador con Playwright (móvil y ordenador) de cada pantalla.
+- **Antes de la fase 1 en Supabase**: descargar la copia de seguridad (Ajustes → Copia de seguridad) de cada cuenta.
+
+## Riesgos
+
+- **La fase 1 toca la seguridad de todos los datos.** Un error en una política podría mostrar datos de otro hogar. Por eso cada tabla y función tendrá su prueba de aislamiento antes de subirla.
+- **Productos y recetas duplicados** si en el futuro se juntan los datos de dos personas: se resolverá con la fusión de productos que ya existe.
+- **Cuentas nuevas**: hoy se crean a mano en Supabase. Si quieres que los invitados se registren solos desde la app, hace falta una pantalla de registro (con el código de invitación como requisito, para que no se registre cualquiera).
+
+## Dudas que quedan para el propietario
+
+1. **Registro de invitados**: ¿sigues creando tú las cuentas en Supabase, o añadimos «Crear cuenta» en la app, solo con un código de invitación?
+2. **Modo por hogar**: el interruptor sencillo/completo afecta a todo el hogar. ¿Te vale, o cada persona debería poder elegir el suyo? Ojo: con modos distintos, uno vería el menú en texto y el otro el menú completo de la misma semana.
+3. **Versión**: ¿la fase 2 (cuando ya se puede compartir) debería ser la **0.6.0**?
