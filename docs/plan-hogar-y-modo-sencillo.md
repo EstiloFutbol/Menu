@@ -11,6 +11,28 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
 | ¿Cómo se elige sencillo o completo? | **Un interruptor para toda la app**, en Ajustes. |
 | ¿Cómo se escribe el menú en modo sencillo? | **Un texto por día.** |
 
+## Garantía principal: nunca se pierde información
+
+Es un requisito del propietario y manda sobre el resto del diseño.
+
+**Al cambiar de hogar, unirse o salir**
+- **Nada se borra nunca** de la base de datos por unirse, cambiar o salir de un hogar.
+- Se distinguen dos acciones:
+  - **Cambiar de hogar**: solo cambia qué hogar ves. Sigues siendo miembro de todos y puedes volver cuando quieras.
+  - **Salir del hogar**: dejas de ser miembro. Lo que añadiste se queda en ese hogar para los demás (es de todos: la despensa de esa casa, sus recetas…).
+- **Al salir, puedes llevarte una copia** a tu hogar personal: tus recetas, los productos del catálogo que usan y tu historial de tickets y compras. Se ofrece siempre antes de confirmar la salida.
+- **El hogar personal no se pierde nunca**: no se puede salir de él ni borrarlo, y sus datos no se tocan al unirte a otros hogares.
+- **Quitar a alguien** (el responsable) equivale a que esa persona salga: no se borra nada y conserva su hogar personal.
+- **No hay «borrar hogar»** en esta versión. Un hogar compartido sin miembros se conserva tal cual.
+
+**Al cambiar entre sencillo y completo**
+- Los dos modos guardan sus datos **por separado** y el interruptor **solo cambia qué se muestra**. Se puede ir y volver cuantas veces se quiera sin perder nada.
+- **En sencillo** se sigue viendo lo del completo:
+  - debajo del texto de cada día, en pequeño y sin poder editarlo, lo que hay planificado en el menú completo («En el menú completo: lentejas, yogur»);
+  - en Compra, lo que hay en la lista completa.
+- **En completo** se sigue viendo lo del sencillo: la nota de cada día en el menú y la lista sencilla como «Apuntado a mano».
+- Ningún cambio de modo modifica datos. Hay un test que cambia de modo varias veces y comprueba que todo sigue igual.
+
 ## En resumen (para quien usa la app)
 
 **Hogar**
@@ -19,7 +41,7 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
 - La otra persona entra con su cuenta, va a **Ajustes → Hogar → «Unirme a un hogar»** y escribe el código.
 - Desde ese momento los dos ven y editan **lo mismo**: si uno marca algo como comprado o consume una receta, el otro lo ve.
 - Quien crea el hogar es su **responsable**: puede invitar, quitar personas y cambiarle el nombre. Cualquiera puede **salir** del hogar.
-- Los datos de cada uno no se pierden al unirse a otro hogar: se quedan guardados en su **hogar personal**, y vuelve a ellos si sale.
+- Al unirse a otro hogar no se pierde nada: los datos de cada uno siguen en su **hogar personal**. Con **«Cambiar de hogar»** se pasa de uno a otro, y al **salir** de un hogar se ofrece llevarse una copia de sus recetas y su historial.
 
 **Modo sencillo**
 - En **Ajustes** se elige **Sencillo** o **Completo**. El modo es del hogar: todos ven la app igual.
@@ -27,7 +49,9 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
   - **Menú**: la semana con un cuadro de texto por día («Lunes: lentejas y fruta; cena: tortilla»). Se guarda solo mientras escribes y se puede cambiar de semana y copiar la semana a la siguiente.
   - **Compra**: una lista escrita por ti, una cosa por línea, con casilla para marcar lo comprado. Puedes pegar varias líneas de golpe y **«Quitar lo comprado»** limpia la lista.
   - **Ajustes**.
-- Al pasar a **completo** no se pierde nada: los textos del menú se ven como **nota de cada día** y la lista sencilla aparece en Compra como **«Apuntado a mano»**. Al volver a sencillo, lo escrito sigue ahí.
+- Se puede cambiar de modo cuantas veces se quiera y **no se pierde nada**:
+  - en completo, los textos del menú se ven como **nota de cada día** y la lista sencilla aparece en Compra como **«Apuntado a mano»**;
+  - en sencillo se ve, sin poder editarlo, lo que hay en el menú y la lista del modo completo.
 
 ## Cómo está hoy (punto de partida)
 
@@ -49,7 +73,7 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
 - `household_members`: `household_id`, `user_id`, `role` (`owner` | `member`), `joined_at`. Clave `(household_id, user_id)`.
 - `household_invites`: `code` (8 caracteres sin ambiguos: sin 0/O ni 1/I), `household_id`, `created_by`, `expires_at`, `used_by`, `used_at`.
 - `household_settings`: las preferencias que hoy están en `user_settings` y afectan a todos (raciones por defecto, inicio de semana, comidas visibles) más el nuevo `mode` (`sencillo` | `completo`).
-- `user_settings` se queda con lo personal: el **hogar activo** (`active_household_id`).
+- `user_settings` se queda con lo personal: el **hogar activo** (`active_household_id`). Cambiar de hogar solo cambia este valor.
 
 **El «hogar actual»**
 - `current_household_id()` devuelve el hogar activo del usuario si sigue siendo miembro; si no, su hogar personal.
@@ -74,12 +98,15 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
 - El trigger de alta crea el hogar personal («Hogar de ana@…»), la membresía como responsable y los productos básicos del hogar.
 
 **Funciones de gestión**
-- `create_household_invite()`, `join_household(code)`, `leave_household()`, `remove_member(user_id)` y `rename_household(name)`.
+- `create_household_invite()`, `join_household(code)`, `switch_household(id)`, `leave_household(copy_to_personal boolean)`, `remove_member(user_id)` y `rename_household(name)`.
+- Ninguna de ellas borra datos: solo cambian membresías o el hogar activo.
+- `leave_household(true)` copia a tu hogar personal tus recetas (con sus pasos), los productos que usan (sin duplicar los que ya tienes, con la lógica de `merge_ingredients`) y tus compras con sus líneas.
+- No se puede salir del hogar personal.
 - Todas en una transacción y comprobando el rol.
 
 **Al unirse a un hogar**
 - Se cambia el hogar activo. Los datos propios quedan intactos en el hogar personal.
-- Más adelante, si hace falta: «Llevar mis recetas al hogar» (copiar recetas y productos, reutilizando la lógica de `merge_ingredients` para no duplicar).
+- Más adelante, si hace falta, lo contrario: «Llevar mis recetas al hogar compartido», con la misma copia sin duplicados.
 
 ### Modo sencillo
 
@@ -97,9 +124,10 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
   - mover de orden;
   - «Quitar lo comprado».
 
-**En modo completo**
-- La nota del día aparece encima del día en el menú.
-- Los apuntes sencillos aparecen como bloque en Lista de la compra.
+**Cada modo muestra lo del otro** (nada se oculta del todo)
+- **En completo**: la nota del día aparece encima del día en el menú (editable), y los apuntes sencillos aparecen como bloque en Lista de la compra (se pueden marcar).
+- **En sencillo**: debajo de cada día, en pequeño y sin poder editarlo, lo planificado en el menú completo; y en Compra, lo que hay en la lista completa.
+- El interruptor solo cambia `household_settings.mode`. No toca ninguna otra tabla.
 
 ### Ver los cambios de los demás
 
@@ -129,6 +157,8 @@ El modo sencillo **también podría ir primero**, porque es más corto y no toca
   - Dos miembros del mismo hogar ven y cambian lo mismo.
   - Un código caducado o ya usado no sirve.
   - Al salir del hogar se vuelve al personal con los datos intactos.
+  - **Nada se borra**: se cuentan las filas de todas las tablas antes y después de unirse, cambiar, salir (con y sin copia) y quitar a alguien. Ninguna baja; solo suben las copias al salir con copia.
+  - **Cambiar de modo no toca datos**: se cambia de sencillo a completo y al revés varias veces y se comprueba que todas las tablas quedan idénticas.
 - **App**: tests de la lógica nueva y pruebas en navegador con Playwright (móvil y ordenador) de cada pantalla.
 - **Antes de la fase 1 en Supabase**: descargar la copia de seguridad (Ajustes → Copia de seguridad) de cada cuenta.
 
