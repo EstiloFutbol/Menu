@@ -6,6 +6,7 @@ import ShoppingSection from './ShoppingSection'
 import type { PantryNotice } from '../lib/pantry-notice'
 import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
+import { useRequestedTab } from '../lib/tutorial'
 
 type View = 'lista' | 'ticket' | 'historial'
 
@@ -13,6 +14,8 @@ export default function PurchaseAreaSection({ onReceiptImported }: { onReceiptIm
   const [view, setViewState] = useState<View>('lista')
   // Pestaña a la que se quiere ir mientras se pregunta por un ticket a medias.
   const [pendingView, setPendingView] = useState<{ view: View; guard: LeaveGuard } | null>(null)
+
+  useRequestedTab('compra', (next) => setViewState(next as View))
 
   function setView(next: View) {
     const guard = getLeaveGuard()
@@ -28,7 +31,7 @@ export default function PurchaseAreaSection({ onReceiptImported }: { onReceiptIm
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 sm:mt-1 sm:text-3xl">Compra y precios</h1>
           <p className="mt-2 hidden text-sm text-neutral-500 sm:block">Planifica la compra, importa tickets y conserva el histórico de precios.</p>
         </div>
-        <div className="grid shrink-0 grid-cols-3 rounded-2xl bg-neutral-100 p-1">
+        <div data-tour="compra-pestanas" className="grid shrink-0 grid-cols-3 rounded-2xl bg-neutral-100 p-1">
           <button
             onClick={() => setView('lista')}
             className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${view === 'lista' ? 'bg-white text-neutral-900 shadow-sm' : 'text-neutral-500'}`}

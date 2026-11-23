@@ -3,8 +3,8 @@
 -- que ya existen no pierden ni cambian NADA y siguen viendo lo mismo.
 \set ON_ERROR_STOP on
 
--- 1. Ninguna fila desaparece ni cambia en ninguna tabla. (En los datos de la fase 1
---    se ignora household_id solo en app_invites, que es la columna nueva y queda vacía.)
+-- 1. Ninguna fila desaparece ni cambia en ninguna tabla. Se ignoran solo las columnas
+--    nuevas, que quedan vacías: household_id en app_invites y tutorials_seen en user_settings.
 do $$
 declare r record; v_rows int; v_hash text;
 begin
@@ -12,9 +12,9 @@ begin
     execute format('select count(*) from public.%I', r.name) into v_rows;
     assert v_rows = r.rows, format('%s: había %s filas y ahora hay %s', r.name, r.rows, v_rows);
     if r.name = 'app_invites' then
-      execute 'select md5(coalesce(string_agg(r, ''|'' order by r), '''')) from (select (to_jsonb(x) - ''household_id'')::text as r from public.app_invites x) s' into v_hash;
+      execute 'select md5(coalesce(string_agg(r, ''|'' order by r), '''')) from (select (to_jsonb(x) - ''household_id'' - ''tutorials_seen'')::text as r from public.app_invites x) s' into v_hash;
     else
-      execute format('select md5(coalesce(string_agg(r, ''|'' order by r), '''')) from (select (to_jsonb(x) - ''household_id'')::text as r from public.%I x) s', r.name) into v_hash;
+      execute format('select md5(coalesce(string_agg(r, ''|'' order by r), '''')) from (select (to_jsonb(x) - ''household_id'' - ''tutorials_seen'')::text as r from public.%I x) s', r.name) into v_hash;
     end if;
     assert v_hash = r.hash, format('%s: ha cambiado el contenido', r.name);
   end loop;
@@ -34,6 +34,7 @@ do $$ begin
   assert (select default_servings from public.household_settings) = 3 and (select week_starts_on from public.household_settings) = 0, 'Ana perdió sus preferencias';
   assert (select count(*) from public.household_member_list(public.current_household_id())) = 1, 'en el hogar de Ana aparece alguien más';
   assert (select mode from public.household_settings) = 'completo', 'Ana no sigue en modo completo';
+  assert (select tutorials_seen from public.user_settings) = '{}', 'Ana tiene tutoriales vistos que no ha visto';
   assert (select count(*) from public.menu_day_notes) = 0 and (select count(*) from public.quick_list_items) = 0, 'aparecen notas o apuntes que nadie escribió';
 end $$;
 reset role;

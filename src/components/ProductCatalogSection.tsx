@@ -281,10 +281,10 @@ export default function ProductCatalogSection() {
         <p className="mt-2 text-sm text-neutral-500">Gestiona todos los productos disponibles, estén o no actualmente en tu despensa.</p>
       </div>
       <div className="flex flex-wrap gap-2">
-        <button onClick={() => void addBasicProducts()} disabled={addingBasics} title="Añade arroz, huevos, tomate, aceite… sin duplicar los que ya tienes" className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50">
+        <button data-tour="productos-basicos" onClick={() => void addBasicProducts()} disabled={addingBasics} title="Añade arroz, huevos, tomate, aceite… sin duplicar los que ya tienes" className="flex items-center gap-2 rounded-2xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium text-neutral-700 disabled:opacity-50">
           <ListPlus size={17} /> {addingBasics ? 'Añadiendo…' : 'Añadir productos básicos'}
         </button>
-        <button onClick={openCreate} className="flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">
+        <button data-tour="productos-nuevo" onClick={openCreate} className="flex items-center gap-2 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">
           <PackagePlus size={17} /> Nuevo producto
         </button>
       </div>
@@ -301,7 +301,7 @@ export default function ProductCatalogSection() {
       </div>
     </div>
 
-    <div className="relative">
+    <div data-tour="productos-buscar" className="relative">
       <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-neutral-400" size={17} />
       <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre, categoría o unidad" className="w-full rounded-2xl border border-neutral-200 bg-white py-3 pl-11 pr-4 text-sm shadow-sm outline-none focus:border-neutral-400" />
     </div>
@@ -348,7 +348,7 @@ export default function ProductCatalogSection() {
           <p className="mx-auto mt-2 max-w-md text-sm text-neutral-500">Crea productos aquí y después podrás utilizarlos en despensa, recetas, menú y tickets.</p>
           {!ingredients.length && <button onClick={openCreate} className="mt-5 rounded-2xl bg-neutral-900 px-4 py-2.5 text-sm font-medium text-white">Crear producto</button>}
         </div>
-      : <div className="grid items-start gap-4 xl:grid-cols-2">
+      : <div data-tour="productos-lista" className="grid items-start gap-4 xl:grid-cols-2">
           {grouped.map(([category, categoryItems]) => <section key={category} className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-neutral-100 bg-neutral-50 px-4 py-3">
               <h3 className="text-sm font-semibold text-neutral-800">{category}</h3>

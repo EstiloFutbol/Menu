@@ -10,6 +10,9 @@ import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from './lib/leave-guard
 import { UnsavedChangesDialog } from './components/UnsavedChangesDialog'
 import { useHouseholds } from './lib/household'
 import { listenToHousehold } from './lib/realtime'
+import TutorialOverlay from './components/TutorialOverlay'
+import { useTutorialState } from './lib/tutorial'
+import { TUTORIALS } from './lib/tutorials'
 import { pendingInviteCode } from './lib/invites'
 import { useSettings } from './lib/settings'
 import SimpleMenuSection from './components/SimpleMenuSection'
@@ -37,6 +40,9 @@ function App() {
   // Cambios en vivo: lo que cambie otra persona del hogar aparece al momento.
   const currentId = current?.id
   useEffect(() => (currentId ? listenToHousehold(currentId) : undefined), [currentId])
+  // Tutorial pedido desde Ajustes → Preferencias → Ayuda: se va a su sección (la pestaña la abre la sección).
+  const { requested } = useTutorialState()
+  useEffect(() => { if (requested) goToSection(TUTORIALS[requested].section) }, [requested]) // eslint-disable-line react-hooks/exhaustive-deps
   const simple = settings.mode === 'sencillo'
   const sections = simple ? allSections.filter(({ id }) => SIMPLE_SECTIONS.includes(id)) : allSections
   // Si se cambia a modo sencillo estando en una sección que no existe en él, se ve el menú.
@@ -68,8 +74,9 @@ function App() {
   return (
     <div className="min-h-screen bg-[#f7f7f5] text-neutral-900">
       {/* En el móvil la navegación va arriba: abajo la recortaban la barra de gestos y las esquinas de la pantalla. */}
+      <TutorialOverlay />
       {pendingLeave && <UnsavedChangesDialog guard={pendingLeave.guard} onStay={() => setPendingLeave(null)} onLeave={() => { setLeaveGuard(null); const next = pendingLeave.section; setPendingLeave(null); goToSection(next) }} />}
-      <nav className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 px-1 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] backdrop-blur lg:hidden">
+      <nav data-tour="nav" className="sticky top-0 z-30 border-b border-neutral-200 bg-white/95 px-1 pb-1.5 pt-[calc(0.375rem+env(safe-area-inset-top))] backdrop-blur lg:hidden">
         <div className={`mx-auto grid max-w-md gap-0.5 ${simple ? 'grid-cols-3' : 'grid-cols-5'}`}>
           {sections.map(({ id, label, icon: Icon }) => { const active = shown === id; return <button key={id} onClick={() => setSection(id)} aria-current={active ? 'page' : undefined} className={`flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 text-[10.5px] font-medium tracking-tight ${active ? 'bg-neutral-900 text-white' : 'text-neutral-500'}`}><Icon size={18} strokeWidth={1.8} />{label}</button> })}
         </div>
@@ -80,7 +87,7 @@ function App() {
             <p className="text-xl font-semibold tracking-tight">Menu</p>
             <p className="mt-1 truncate text-xs text-neutral-400" title={current?.name}>{current && (households.length > 1 || current.memberCount > 1) ? current.name : 'Planificación personal'}</p>
           </div>
-          <nav className="mt-8 space-y-1">
+          <nav data-tour="nav" className="mt-8 space-y-1">
             {sections.map(({ id, label, icon: Icon }) => {
               const active = shown === id
               return <button key={id} onClick={() => setSection(id)} className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-sm font-medium transition ${active ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-white'}`}><Icon size={18} strokeWidth={1.8} />{label}</button>

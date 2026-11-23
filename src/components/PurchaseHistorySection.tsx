@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
 import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 import { authorLabel, useHouseholdMembers } from '../lib/household'
+import { useTutorial } from '../lib/tutorial'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -166,6 +167,7 @@ export default function PurchaseHistorySection() {
 
   useEffect(() => { void load() }, [load])
   useRefreshOnReturn(load)
+  useTutorial('compra-historial', !loading)
 
   const totals = useMemo(() => {
     const spent = purchases.reduce((sum, purchase) => sum + Number(purchase.total_amount), 0)
@@ -318,7 +320,7 @@ export default function PurchaseHistorySection() {
   if (loading) return <div className="rounded-3xl border border-neutral-200 bg-white p-8 text-sm text-neutral-500 shadow-sm">Cargando historial…</div>
 
   return (
-    <div className="space-y-5">
+    <div data-tour="historial-lista" className="space-y-5">
       {error && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
       <div className="grid gap-3 sm:grid-cols-3">

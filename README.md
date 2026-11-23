@@ -230,6 +230,8 @@ La migración `20261127000100_simple_mode.sql` es la **fase 3: modo sencillo**.
 
 La migración `20261128000100_realtime.sql` es la **fase 4: cambios en vivo**. Añade las tablas compartidas a la publicación `supabase_realtime` (sin tocar datos y saltando las que ya estén). La app (`src/lib/realtime.ts`) escucha los cambios del hogar actual y recarga lo que se ve sin «Cargando…» (`refreshForRemoteChange` en `src/lib/refresh.ts`). No recarga si hay cambios sin guardar; si la app está en segundo plano, recarga al volver. Realtime respeta la seguridad: cada persona solo recibe cambios de filas de su hogar. En el plan gratuito de Supabase basta con aplicar la migración.
 
+La migración `20261129000100_tutorials.sql` guarda en `user_settings.tutorials_seen` qué tutoriales ha visto o saltado cada persona (`mark_tutorial_seen`, `reset_tutorials`). Empieza vacía también para las cuentas que ya existían. Los textos están en `src/lib/tutorials.ts`. Cada paso señala un elemento con `data-tour="…"`, y un test comprueba que todos existen.
+
 ### Probar las migraciones
 
 `npm run test:db` levanta un PostgreSQL 16 temporal (necesita `initdb`, `pg_ctl` y `psql`; ruta configurable con `PG_BIN`) y hace lo siguiente:
