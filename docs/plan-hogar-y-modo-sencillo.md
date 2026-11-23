@@ -10,6 +10,9 @@ Estado: **propuesta para revisar**. Nada de esto está hecho todavía.
 | ¿Qué se comparte? | **Todo**: despensa, menú, lista de la compra, recetas, productos, tickets e historial. |
 | ¿Cómo se elige sencillo o completo? | **Un interruptor para toda la app**, en Ajustes. |
 | ¿Cómo se escribe el menú en modo sencillo? | **Un texto por día.** |
+| ¿Cómo consiguen cuenta los invitados? | **«Crear cuenta» en la app, solo con un código de invitación.** Tú puedes seguir creando cuentas en Supabase. |
+| ¿El modo es de cada persona o del hogar? | **Del hogar**: todos ven la app en el mismo modo. |
+| ¿Qué versión marca que ya se puede compartir? | **0.6.0**, al terminar la fase 2. |
 
 ## Garantía principal: nunca se pierde información
 
@@ -38,7 +41,9 @@ Es un requisito del propietario y manda sobre el resto del diseño.
 **Hogar**
 - En **Ajustes → Hogar** cada cuenta ve su hogar: el nombre, quién está y un botón **«Invitar»**.
 - **Invitar** genera un código corto (por ejemplo `K7M-Q2PX`), que caduca a los 7 días y sirve para una persona.
-- La otra persona entra con su cuenta, va a **Ajustes → Hogar → «Unirme a un hogar»** y escribe el código.
+- La otra persona:
+  - **si no tiene cuenta**: en la pantalla de entrada pulsa **«Crear cuenta con invitación»** y escribe el código, su correo y una contraseña. Entra directamente en el hogar;
+  - **si ya tiene cuenta**: va a **Ajustes → Hogar → «Unirme a un hogar»** y escribe el código.
 - Desde ese momento los dos ven y editan **lo mismo**: si uno marca algo como comprado o consume una receta, el otro lo ve.
 - Quien crea el hogar es su **responsable**: puede invitar, quitar personas y cambiarle el nombre. Cualquiera puede **salir** del hogar.
 - Al unirse a otro hogar no se pierde nada: los datos de cada uno siguen en su **hogar personal**. Con **«Cambiar de hogar»** se pasa de uno a otro, y al **salir** de un hogar se ofrece llevarse una copia de sus recetas y su historial.
@@ -62,7 +67,7 @@ Es un requisito del propietario y manda sobre el resto del diseño.
   - `delete_purchase_and_reverse_pantry`, `delete_purchase_item_and_reverse_pantry`, `delete_unused_ingredient`;
   - `import_reviewed_receipt`, `merge_ingredients`, `refresh_menu_entry_completion`, `regenerate_shopping_list`;
   - `reverse_purchase_item_pantry_effect`, `save_menu_slot`, `save_recipe`, `undo_consumption`.
-- La app no tiene pantalla de registro: las cuentas se crean en Supabase.
+- La app no tiene pantalla de registro: las cuentas se crean en Supabase. Por eso el registro público está, en la práctica, cerrado, y así debe seguir: solo se podrá crear cuenta con un código válido.
 
 ## Diseño técnico
 
@@ -104,6 +109,16 @@ Es un requisito del propietario y manda sobre el resto del diseño.
 - No se puede salir del hogar personal.
 - Todas en una transacción y comprobando el rol.
 
+**Crear cuenta con código de invitación**
+- La pantalla de entrada (`AuthGate`) tiene un enlace **«Crear cuenta con invitación»**: código, correo y contraseña (con las mismas reglas que «Cambiar contraseña»).
+- La app llama a `supabase.auth.signUp` enviando el código en los datos del usuario (`options.data.invite_code`).
+- **La comprobación del código es en la base de datos, no en la app.** Con la clave pública cualquiera podría llamar al registro de Supabase saltándose la app. Hay dos formas, que se probarán en Supabase en este orden:
+  1. **Auth hook «Before User Created»** de Supabase: una función SQL que rechaza el alta si el código no existe, ha caducado o ya se usó. Es la forma prevista por Supabase para esto.
+  2. Si el plan gratuito no lo permite: un **trigger `before insert` en `auth.users`** con la misma comprobación. Hay que confirmar que deja seguir creando cuentas desde el panel de Supabase (por ejemplo, permitiendo las altas sin código solo desde el panel).
+- Tras el alta, el trigger que ya crea el hogar personal y los productos básicos también **une la cuenta al hogar del código**, lo deja como hogar activo y marca el código como usado.
+- **Confirmación del correo**: si en Supabase está activada, el invitado recibe un correo para confirmar antes de entrar. Se mantiene activada, y la app lo explica tras el registro («Te hemos enviado un correo para confirmar la cuenta»).
+- **Los intentos con códigos inválidos no crean nada.** El código tiene 8 caracteres de un alfabeto de 31, unos 850 000 millones de combinaciones, caduca a los 7 días y sirve una vez. Adivinarlo no es práctico.
+
 **Al unirse a un hogar**
 - Se cambia el hogar activo. Los datos propios quedan intactos en el hogar personal.
 - Más adelante, si hace falta, lo contrario: «Llevar mis recetas al hogar compartido», con la misma copia sin duplicados.
@@ -142,7 +157,7 @@ Cada fase es una PR, o un par de ellas, con su migración probada en PostgreSQL 
 | Fase | Qué incluye | Qué ve el usuario |
 |---|---|---|
 | **1. Base del hogar** | Tablas de hogar. `household_id` en las 8 tablas. Políticas y 16 funciones por hogar. Hogar personal para las 3 cuentas actuales. Ajustes de planificación pasan al hogar. | Nada cambia. Es la más delicada: toca todas las tablas. |
-| **2. Invitar y gestionar** | Ajustes → Hogar: nombre, miembros, invitar con código, unirse, salir, quitar a alguien. Recarga al volver a la app. | Ya se puede compartir todo con otra cuenta. |
+| **2. Invitar y gestionar** (versión **0.6.0**) | Ajustes → Hogar: nombre, miembros, invitar con código, unirse, cambiar de hogar, salir (con copia) y quitar a alguien. **«Crear cuenta con invitación»** en la pantalla de entrada. Recarga al volver a la app. | Ya se puede compartir todo con otra cuenta, y los invitados se crean la cuenta solos. |
 | **3. Modo sencillo** | Tablas de notas del día y lista sencilla, interruptor en Ajustes, pantallas de menú y compra sencillos, y cómo se ven en modo completo. | El modo sencillo completo. |
 | **4. En vivo y autoría** | Supabase Realtime en lista, menú y despensa. «Lo hizo Ana» en tickets y consumos. | Los cambios del otro aparecen al momento. |
 
@@ -166,10 +181,9 @@ El modo sencillo **también podría ir primero**, porque es más corto y no toca
 
 - **La fase 1 toca la seguridad de todos los datos.** Un error en una política podría mostrar datos de otro hogar. Por eso cada tabla y función tendrá su prueba de aislamiento antes de subirla.
 - **Productos y recetas duplicados** si en el futuro se juntan los datos de dos personas: se resolverá con la fusión de productos que ya existe.
-- **Cuentas nuevas**: hoy se crean a mano en Supabase. Si quieres que los invitados se registren solos desde la app, hace falta una pantalla de registro (con el código de invitación como requisito, para que no se registre cualquiera).
+- **Registro abierto por error**: si la comprobación del código fallara, cualquiera podría crearse una cuenta. Por eso la comprobación está en la base de datos y tendrá pruebas de que sin código válido no se crea nada.
 
-## Dudas que quedan para el propietario
+## Pendiente de comprobar al implementar
 
-1. **Registro de invitados**: ¿sigues creando tú las cuentas en Supabase, o añadimos «Crear cuenta» en la app, solo con un código de invitación?
-2. **Modo por hogar**: el interruptor sencillo/completo afecta a todo el hogar. ¿Te vale, o cada persona debería poder elegir el suyo? Ojo: con modos distintos, uno vería el menú en texto y el otro el menú completo de la misma semana.
-3. **Versión**: ¿la fase 2 (cuando ya se puede compartir) debería ser la **0.6.0**?
+- En Supabase: si el hook «Before User Created» está disponible en el plan del proyecto, o hay que usar el trigger. Y que, en ese caso, se siguen pudiendo crear cuentas desde el panel.
+- Si la confirmación de correo está activada en el proyecto «Menu», y el texto del correo.
