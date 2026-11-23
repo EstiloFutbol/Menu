@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 import ProductCatalogSection from './ProductCatalogSection'
 import { NumberInput } from './NumberInput'
 import type { PantryNotice } from '../lib/pantry-notice'
-import { useRefreshOnReturn } from '../lib/refresh'
+import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = ['Fruta y verdura', 'Carne', 'Pescado y marisco', 'Lácteos y huevos', 'Panadería', 'Despensa', 'Congelados', 'Bebidas', 'Salsas y condimentos', 'Otros'] as const
@@ -45,7 +45,7 @@ function PantrySection({ notice = null, onDismissNotice }: { notice?: PantryNoti
 
   const loadData = useCallback(async () => {
     if (!supabase) return
-    setLoading(true); setError(null)
+    if (!isQuietRefresh()) setLoading(true); setError(null)
     const [{ data: ingredientData, error: ingredientError }, { data: pantryData, error: pantryError }] = await Promise.all([
       supabase.from('ingredients').select('id,name,category,default_unit').order('name'),
       supabase.from('pantry_items').select('id,quantity,unit,status,notes,ingredient:ingredients(id,name,category,default_unit)').order('updated_at', { ascending: false }),

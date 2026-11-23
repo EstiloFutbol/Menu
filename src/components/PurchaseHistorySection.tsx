@@ -3,7 +3,8 @@ import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react'
 import { friendlyError } from '../lib/errors'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
-import { useRefreshOnReturn } from '../lib/refresh'
+import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
+import { authorLabel, useHouseholdMembers } from '../lib/household'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 type Unit = (typeof units)[number]
@@ -39,6 +40,7 @@ type Purchase = {
   discount_total: number
   currency: string
   receipt_number: string | null
+  user_id?: string | null
   payment_method: string | null
   notes: string | null
   purchase_items: PurchaseItem[]
@@ -96,6 +98,8 @@ function numberOrNull(value: string) {
 }
 
 export default function PurchaseHistorySection() {
+  // En un hogar compartido se dice quién subió cada ticket.
+  const members = useHouseholdMembers()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [ingredients, setIngredients] = useState<Ingredient[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,7 +114,7 @@ export default function PurchaseHistorySection() {
 
   const load = useCallback(async () => {
     if (!supabase) return
-    setLoading(true)
+    if (!isQuietRefresh()) setLoading(true)
     setError('')
 
     const [{ data, error: queryError }, { data: ingredientData, error: ingredientError }] = await Promise.all([
@@ -125,6 +129,7 @@ export default function PurchaseHistorySection() {
           discount_total,
           currency,
           receipt_number,
+          user_id,
           payment_method,
           notes,
           purchase_items (
@@ -334,7 +339,7 @@ export default function PurchaseHistorySection() {
               <section key={purchase.id} className="overflow-hidden rounded-3xl border border-neutral-200 bg-white shadow-sm">
                 <div className="flex items-center gap-2">
                   <button type="button" onClick={() => setOpenPurchase(open ? null : purchase.id)} className="flex min-w-0 flex-1 items-center justify-between gap-4 p-5 text-left hover:bg-neutral-50">
-                    <div className="min-w-0"><div className="flex items-center gap-2"><Store size={17} className="text-neutral-400" /><h3 className="truncate font-semibold text-neutral-950">{purchase.store_name}</h3></div><p className="mt-1 text-sm text-neutral-500">{date} · {items.length} productos</p>{purchase.store_address && <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-neutral-400"><MapPin size={12} /> {purchase.store_address}</p>}</div>
+                    <div className="min-w-0"><div className="flex items-center gap-2"><Store size={17} className="text-neutral-400" /><h3 className="truncate font-semibold text-neutral-950">{purchase.store_name}</h3></div><p className="mt-1 text-sm text-neutral-500">{date} · {items.length} productos{authorLabel(purchase.user_id, members) && <> · subido {authorLabel(purchase.user_id, members)}</>}</p>{purchase.store_address && <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-neutral-400"><MapPin size={12} /> {purchase.store_address}</p>}</div>
                     <div className="flex shrink-0 items-center gap-3"><div className="text-right"><p className="text-lg font-semibold text-neutral-950">{money(Number(purchase.total_amount))}</p>{Number(purchase.discount_total) > 0 && <p className="text-xs text-emerald-700">-{money(Number(purchase.discount_total))} dto.</p>}</div>{open ? <ChevronUp size={18} className="text-neutral-400" /> : <ChevronDown size={18} className="text-neutral-400" />}</div>
                   </button>
                   <button type="button" onClick={() => startPurchaseEdit(purchase)} className="mr-4 rounded-xl p-2 text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900" aria-label="Editar ticket"><Pencil size={17} /></button>

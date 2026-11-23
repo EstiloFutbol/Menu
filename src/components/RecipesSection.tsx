@@ -7,7 +7,7 @@ import { matchesSearch, rankBySearch } from '../lib/search'
 import { NumberInput } from './NumberInput'
 import { setLeaveGuard } from '../lib/leave-guard'
 import { UnsavedChangesDialog } from './UnsavedChangesDialog'
-import { useRefreshOnReturn } from '../lib/refresh'
+import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
 const categories = [
@@ -270,7 +270,7 @@ export default function RecipesSection() {
 
   const loadData = useCallback(async () => {
     if (!supabase) return
-    setLoading(true)
+    if (!isQuietRefresh()) setLoading(true)
     setError(null)
     const [{ data: recipeData, error: recipeError }, { data: ingredientData, error: ingredientError }] = await Promise.all([
       supabase

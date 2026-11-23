@@ -1,5 +1,5 @@
 import { CalendarDays, ChefHat, Home, PackageOpen, Settings, ShoppingBasket } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import MenuSection from './components/MenuSection'
 import PantrySection from './components/PantrySection'
 import PurchaseAreaSection from './components/PurchaseAreaSection'
@@ -9,6 +9,7 @@ import type { PantryNotice } from './lib/pantry-notice'
 import { getLeaveGuard, setLeaveGuard, type LeaveGuard } from './lib/leave-guard'
 import { UnsavedChangesDialog } from './components/UnsavedChangesDialog'
 import { useHouseholds } from './lib/household'
+import { listenToHousehold } from './lib/realtime'
 import { pendingInviteCode } from './lib/invites'
 import { useSettings } from './lib/settings'
 import SimpleMenuSection from './components/SimpleMenuSection'
@@ -33,6 +34,9 @@ function App() {
   // Al cambiar de hogar cambia `version` y las secciones se vuelven a cargar con sus datos.
   const { current, households, version } = useHouseholds()
   const { settings, ready } = useSettings()
+  // Cambios en vivo: lo que cambie otra persona del hogar aparece al momento.
+  const currentId = current?.id
+  useEffect(() => (currentId ? listenToHousehold(currentId) : undefined), [currentId])
   const simple = settings.mode === 'sencillo'
   const sections = simple ? allSections.filter(({ id }) => SIMPLE_SECTIONS.includes(id)) : allSections
   // Si se cambia a modo sencillo estando en una sección que no existe en él, se ve el menú.

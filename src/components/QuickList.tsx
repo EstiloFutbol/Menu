@@ -2,10 +2,11 @@ import { ArrowDown, ArrowUp, Check, Plus, Trash2 } from 'lucide-react'
 import { type FormEvent, type KeyboardEvent, useCallback, useEffect, useState } from 'react'
 import { friendlyError } from '../lib/errors'
 import { useRefreshOnReturn } from '../lib/refresh'
+import { authorLabel, useHouseholdMembers } from '../lib/household'
 import { moveItem, QUICK_ITEM_MAX, splitQuickItems } from '../lib/simple'
 import { supabase } from '../lib/supabase'
 
-export type QuickItem = { id: string; text: string; checked: boolean; position: number }
+export type QuickItem = { id: string; text: string; checked: boolean; position: number; created_by?: string | null }
 
 // Lista de la compra escrita a mano (modo sencillo).
 // * editable: añadir (varias líneas a la vez), marcar, ordenar, borrar y «Quitar lo comprado».
@@ -17,10 +18,13 @@ export function QuickList({ editable }: { editable: boolean }) {
   const [input, setInput] = useState('')
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  // En un hogar compartido se indica quién apuntó lo que no apuntaste tú.
+  const members = useHouseholdMembers()
+  const addedByOther = (item: QuickItem) => { const label = authorLabel(item.created_by, members); return label && label !== 'por ti' ? `apuntado ${label}` : null }
 
   const load = useCallback(async () => {
     if (!supabase) return
-    const { data, error: loadError } = await supabase.from('quick_list_items').select('id,text,checked,position').order('position').order('created_at')
+    const { data, error: loadError } = await supabase.from('quick_list_items').select('id,text,checked,position,created_by').order('position').order('created_at')
     if (loadError) {
       // Sin la migración del modo sencillo, el bloque del modo completo simplemente no aparece.
       if (editable) setError(/quick_list_items/.test(loadError.message) ? 'Falta aplicar en Supabase la migración 20261127000100_simple_mode.sql.' : friendlyError(loadError, 'No se pudo cargar la lista.'))
@@ -97,7 +101,7 @@ export function QuickList({ editable }: { editable: boolean }) {
     <ul className="divide-y divide-neutral-100">
       {items.map((item, index) => <li key={item.id} className={`flex items-center gap-3 px-4 py-2.5 sm:px-5 ${item.checked ? 'bg-neutral-50' : ''}`}>
         <button type="button" onClick={() => void toggle(item)} className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg border transition ${item.checked ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 bg-white'}`} aria-label={item.checked ? `Marcar ${item.text} como pendiente` : `Marcar ${item.text} como comprado`}>{item.checked && <Check size={15} />}</button>
-        <p className={`min-w-0 flex-1 break-words text-sm ${item.checked ? 'text-neutral-400 line-through' : 'text-neutral-800'}`}>{item.text}</p>
+        <p className={`min-w-0 flex-1 break-words text-sm ${item.checked ? 'text-neutral-400 line-through' : 'text-neutral-800'}`}>{item.text}{addedByOther(item) && <span className="ml-1.5 text-[11px] font-normal text-neutral-400 no-underline">· {addedByOther(item)}</span>}</p>
         {editable && <div className="flex shrink-0 items-center">
           <button type="button" disabled={index === 0} onClick={() => void move(item, -1)} className="grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-neutral-100 disabled:opacity-25" aria-label={`Subir ${item.text}`}><ArrowUp size={15} /></button>
           <button type="button" disabled={index === items.length - 1} onClick={() => void move(item, 1)} className="grid h-8 w-8 place-items-center rounded-lg text-neutral-400 hover:bg-neutral-100 disabled:opacity-25" aria-label={`Bajar ${item.text}`}><ArrowDown size={15} /></button>

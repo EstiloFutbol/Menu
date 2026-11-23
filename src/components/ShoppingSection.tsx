@@ -6,7 +6,7 @@ import { friendlyError } from '../lib/errors'
 import { useSettings } from '../lib/settings'
 import { supabase } from '../lib/supabase'
 import { NumberInput } from './NumberInput'
-import { useRefreshOnReturn } from '../lib/refresh'
+import { isQuietRefresh, useRefreshOnReturn } from '../lib/refresh'
 import { QuickList } from './QuickList'
 
 const units = ['g', 'kg', 'ml', 'l', 'unidad', 'cucharada', 'cucharadita', 'taza', 'lata', 'paquete'] as const
@@ -72,7 +72,7 @@ function ShoppingSection() {
 
   const loadList = useCallback(async () => {
     if (!supabase) return
-    setLoading(true)
+    if (!isQuietRefresh()) setLoading(true)
     setError('')
 
     const { data: list, error: listError } = await supabase
