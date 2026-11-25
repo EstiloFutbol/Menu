@@ -33,10 +33,23 @@ export function loadTutorialsSeen(): Promise<void> {
   return loading
 }
 
+// Guarda en la cuenta que ya lo ha visto. Ojo: una llamada de Supabase no se envía
+// hasta que se espera (await o .then); con `void` se quedaba sin enviar y el tutorial
+// volvía a salir al recargar. Si falla (sin conexión), se reintenta un par de veces.
+export async function saveTutorialSeen(id: TutorialId, attempts = 3, waitMs = 3000): Promise<boolean> {
+  if (!supabase) return false
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    const { error } = await supabase.rpc('mark_tutorial_seen', { p_tutorial: id })
+    if (!error) return true
+    if (attempt < attempts) await new Promise((resolve) => setTimeout(resolve, waitMs))
+  }
+  return false
+}
+
 function markSeen(id: TutorialId) {
   if (state.seen.has(id)) return
   setState({ seen: new Set([...state.seen, id]) })
-  void supabase?.rpc('mark_tutorial_seen', { p_tutorial: id })
+  void saveTutorialSeen(id)
 }
 
 export function startTutorial(id: TutorialId) {
