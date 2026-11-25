@@ -6,6 +6,10 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.5 — 2026-11-25
+
+- Tutoriales: arreglado que un tutorial volviera a salir después de saltarlo o terminarlo. No se llegaba a guardar en la cuenta que ya lo habías visto. Ahora se guarda y, si no hay conexión en ese momento, se reintenta. Los tutoriales que saltaste antes de este arreglo te saldrán una última vez.
+
 ## 0.6.4 — 2026-11-23
 
 - Tutoriales: la primera vez que entras en cada pestaña (Menú, Recetas, Compra → Lista, Ticket e Historial, Despensa, Productos y cada parte de Ajustes) sale un tutorial corto que va señalando la pantalla paso a paso. El modo sencillo tiene los suyos.
