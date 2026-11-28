@@ -6,6 +6,12 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.6 — 2026-11-28
+
+- Tutoriales más fluidos: el recuadro ya no entra desde una esquina ni salta de sitio. Al pasar de paso, el globo desaparece suavemente, la pantalla se desplaza hasta lo siguiente y, cuando está quieta, el foco se desliza hasta allí y el globo aparece en su sitio. Al empezar y al terminar, todo aparece y desaparece poco a poco.
+- Si tienes activado en el móvil «reducir movimiento», el tutorial no hace animaciones.
+- Los tutoriales que ya habías visto o saltado siguen sin salir.
+
 ## 0.6.5 — 2026-11-25
 
 - Tutoriales: arreglado que un tutorial volviera a salir después de saltarlo o terminarlo. No se llegaba a guardar en la cuenta que ya lo habías visto. Ahora se guarda y, si no hay conexión en ese momento, se reintenta. Los tutoriales que saltaste antes de este arreglo te saldrán una última vez.
