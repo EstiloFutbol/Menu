@@ -197,6 +197,8 @@ function AccountTab() {
       <section data-tour="cuenta-sobre" className={card}>
         <h2 className="text-base font-semibold">Sobre la app</h2>
         <p className="mt-2 text-sm text-neutral-500">Versión <span className="font-medium text-neutral-900">{__APP_VERSION__}</span>{builtAt && <> · publicada el {builtAt}</>}{__APP_COMMIT__ && <span className="text-neutral-400"> ({__APP_COMMIT__})</span>}</p>
+        {/* La licencia AGPL pide ofrecer el código a quien usa la app por internet. */}
+        <p className="mt-2 text-sm text-neutral-500">Menu es software libre (licencia AGPL-3.0). <a href="https://github.com/EstiloFutbol/Menu" target="_blank" rel="noreferrer" className="font-medium text-neutral-700 underline underline-offset-2">Ver el código fuente</a></p>
         <button type="button" onClick={checkUpdates} disabled={updating} className={`${buttonClass} mt-4`}>{updating ? 'Buscando…' : 'Buscar actualizaciones'}</button>
         <NoticeText notice={updateNotice} />
         {changelog.length > 0 && <div className="mt-5 border-t border-neutral-100 pt-4">

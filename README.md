@@ -345,3 +345,9 @@ Dependabot propone cada semana actualizaciones de npm y cada mes actualizaciones
 ## Estrategia de desarrollo
 
 Los cambios se desarrollan en ramas de trabajo y se integran en `main` mediante pull request. `main` representa la versión desplegable de la aplicación.
+
+## Licencia
+
+Menu es software libre: puedes usarlo, estudiarlo, modificarlo y compartirlo bajo los términos de la [GNU Affero General Public License v3.0 o posterior](LICENSE) (AGPL-3.0-or-later).
+
+Si publicas una versión modificada y la ofreces a otras personas por internet, tienes que ofrecerles también su código fuente. La app enlaza al suyo en Ajustes → Cuenta → Sobre la app.

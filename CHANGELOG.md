@@ -6,6 +6,10 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 - Cada cambio sube el último número (0.5.1, 0.5.2… 0.5.10…).
 - El número del medio sube solo al cerrar un hito (por ejemplo, terminar una fase). La 1.0.0 será la app terminada.
 
+## 0.6.7 — 2026-11-28
+
+- Menu pasa a ser software libre, con licencia AGPL-3.0: cualquiera puede ver y mejorar el código, y quien haga su propia versión tiene que compartir sus cambios. En Ajustes → Cuenta → Sobre la app hay un enlace al código fuente.
+
 ## 0.6.6 — 2026-11-28
 
 - Tutoriales sin animaciones: en cada paso, el recuadro y el texto salen directamente en su sitio. Ya no entran desde una esquina ni saltan de posición. Si lo que se explica está más abajo, la pantalla va hasta allí antes de enseñarlo.
