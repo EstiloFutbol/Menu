@@ -8,8 +8,7 @@ arriba es la que se ve en Ajustes → Cuenta → Sobre la app.
 
 ## 0.6.6 — 2026-11-28
 
-- Tutoriales más fluidos: el recuadro ya no entra desde una esquina ni salta de sitio. Al pasar de paso, el globo desaparece suavemente, la pantalla se desplaza hasta lo siguiente y, cuando está quieta, el foco se desliza hasta allí y el globo aparece en su sitio. Al empezar y al terminar, todo aparece y desaparece poco a poco.
-- Si tienes activado en el móvil «reducir movimiento», el tutorial no hace animaciones.
+- Tutoriales sin animaciones: en cada paso, el recuadro y el texto salen directamente en su sitio. Ya no entran desde una esquina ni saltan de posición. Si lo que se explica está más abajo, la pantalla va hasta allí antes de enseñarlo.
 - Los tutoriales que ya habías visto o saltado siguen sin salir.
 
 ## 0.6.5 — 2026-11-25

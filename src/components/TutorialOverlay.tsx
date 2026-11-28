@@ -8,9 +8,6 @@ type Rect = { top: number; left: number; width: number; height: number }
 const PAD = 6
 const BUBBLE_SPACE = 240
 const DIM = 'rgba(10, 10, 10, 0.55)'
-// Duraciones de las animaciones (ms).
-const FADE_MS = 180
-const MOVE_MS = 320
 
 // Primer elemento visible con ese data-tour (hay partes que existen dos veces: móvil y ordenador).
 export function findTarget(name: string | undefined): HTMLElement | null {
@@ -43,7 +40,6 @@ export function sameRect(a: Rect | null, b: Rect | null) {
 }
 
 const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms))
 const measure = (element: HTMLElement): Rect => { const box = element.getBoundingClientRect(); return { top: box.top, left: box.left, width: box.width, height: box.height } }
 
 // Espera a que exista lo señalado (la pantalla puede estar terminando de cargar).
@@ -70,24 +66,13 @@ async function waitUntilStill(read: () => string, maxMs: number) {
   }
 }
 
-// Muestra el tutorial activo por encima de toda la app.
-// Para que se vea fluido: el globo desaparece suavemente, la pantalla se desplaza hasta lo
-// siguiente y, cuando ya está quieta, el foco se desliza hasta allí y el globo aparece en su
-// sitio. Así nada aparece primero en una esquina ni salta de posición.
+// Muestra el tutorial activo por encima de toda la app, sin animaciones: en cada paso se
+// lleva lo señalado a la vista y, cuando la pantalla ya está quieta, el foco y el globo
+// salen directamente en su sitio. Mientras tanto no se enseña nada, para que nada se vea
+// primero en un sitio y luego en otro.
 export default function TutorialOverlay() {
   const { active } = useTutorialState()
-  const reduceMotion = useMemo(() => typeof window !== 'undefined' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches, [])
-
-  // Se conserva un momento al cerrarlo, para que desaparezca poco a poco.
-  const [shownId, setShownId] = useState<TutorialId | null>(active?.id ?? null)
-  const [leaving, setLeaving] = useState(false)
-  useEffect(() => {
-    if (active) { setShownId(active.id); setLeaving(false); return }
-    setLeaving(true)
-    const timer = window.setTimeout(() => { setShownId(null); setLeaving(false) }, reduceMotion ? 0 : FADE_MS)
-    return () => window.clearTimeout(timer)
-  }, [active, reduceMotion])
-
+  const shownId: TutorialId | null = active?.id ?? null
   const tutorial: Tutorial | null = shownId ? TUTORIALS[shownId] : null
   // Los pasos opcionales se quitan si su parte no está en pantalla al empezar.
   const steps = useMemo(() => tutorial ? tutorial.steps.filter((step) => !step.optional || findTarget(step.target)) : [], [tutorial])
@@ -96,7 +81,6 @@ export default function TutorialOverlay() {
   const [rect, setRect] = useState<Rect | null>(null)
   const [visibleIndex, setVisibleIndex] = useState<number | null>(null)
   const [moving, setMoving] = useState(false)
-  const [animate, setAnimate] = useState(false)
   const target = useRef<HTMLElement | null>(null)
   const rectRef = useRef<Rect | null>(null)
   const nextButton = useRef<HTMLButtonElement>(null)
@@ -109,29 +93,26 @@ export default function TutorialOverlay() {
     if (!active || !steps.length) return
     let cancelled = false
     const step = steps[index]
-    const wasShowing = visibleIndex !== null
+    // Mientras se prepara el paso, la pantalla queda oscurecida sin señalar nada.
+    target.current = null
     setMoving(true)
     void (async () => {
-      if (wasShowing && !reduceMotion) await sleep(FADE_MS)
       const element = await waitForTarget(step.target, 1500)
       if (cancelled) return
       if (element) {
         const box = measure(element)
         const maxScroll = document.documentElement.scrollHeight - window.innerHeight
         const top = scrollTargetFor(box, window.scrollY, window.innerHeight, maxScroll)
-        if (Math.abs(top - window.scrollY) > 4) window.scrollTo({ top, behavior: reduceMotion ? 'auto' : 'smooth' })
+        if (Math.abs(top - window.scrollY) > 4) window.scrollTo({ top, behavior: 'instant' })
         await waitUntilStill(() => `${Math.round(window.scrollY)}|${JSON.stringify(measure(element))}`, 1500)
         if (cancelled) return
       }
       target.current = element
       const next = element ? measure(element) : null
-      // El foco se desliza desde lo anterior; la primera vez aparece ya en su sitio.
-      setAnimate(wasShowing && !reduceMotion)
       rectRef.current = next
       setRect(next)
       setVisibleIndex(index)
       setMoving(false)
-      if (wasShowing && !reduceMotion) window.setTimeout(() => { if (!cancelled) setAnimate(false) }, MOVE_MS)
     })()
     return () => { cancelled = true }
   }, [active?.id, index, steps]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -151,7 +132,7 @@ export default function TutorialOverlay() {
     return () => cancelAnimationFrame(frame)
   }, [shownId])
 
-  const showing = visibleIndex !== null && !moving && !leaving
+  const showing = visibleIndex !== null && !moving
   useEffect(() => { if (showing) nextButton.current?.focus({ preventScroll: true }) }, [showing, visibleIndex])
 
   const last = index === steps.length - 1
@@ -171,31 +152,26 @@ export default function TutorialOverlay() {
   const viewportWidth = typeof window === 'undefined' ? 400 : window.innerWidth
   const viewportHeight = typeof window === 'undefined' ? 800 : window.innerHeight
   // Sin nada que señalar, el «agujero» se cierra en el centro y todo queda oscurecido.
-  const hole = rect
+  const hole = rect && !moving
     ? { top: rect.top - PAD, left: rect.left - PAD, width: rect.width + PAD * 2, height: rect.height + PAD * 2 }
     : { top: viewportHeight / 2, left: viewportWidth / 2, width: 0, height: 0 }
   const position = bubblePosition(rect, viewportHeight)
   const shownStep = steps[visibleIndex ?? index]
-  const overlayVisible = visibleIndex !== null && !leaving
-  const fade = reduceMotion ? 'none' : `opacity ${FADE_MS}ms ease`
-  const slide = reduceMotion ? 'none' : `opacity ${FADE_MS}ms ease, transform ${FADE_MS}ms ease`
 
   return createPortal(<div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-labelledby="tutorial-title" aria-describedby="tutorial-text"
-    style={{ opacity: overlayVisible ? 1 : 0, transition: fade }}>
+    style={{ visibility: visibleIndex === null ? 'hidden' : 'visible' }}>
     {/* Oscurece todo menos lo señalado; no deja tocar la app mientras dura el tutorial. */}
     <div aria-hidden className="pointer-events-none fixed rounded-2xl" style={{
       ...hole,
-      boxShadow: `${rect ? '0 0 0 2px #fff, ' : ''}0 0 0 9999px ${DIM}`,
-      transition: animate ? `top ${MOVE_MS}ms ease, left ${MOVE_MS}ms ease, width ${MOVE_MS}ms ease, height ${MOVE_MS}ms ease` : 'none',
+      boxShadow: `${rect && !moving ? '0 0 0 2px #fff, ' : ''}0 0 0 9999px ${DIM}`,
     }} />
     <div className="fixed inset-0" onClick={(event) => event.stopPropagation()} />
-    {/* El sitio del globo cambia sin animación (mientras está escondido); solo se anima
-        su aparición, para que no se vea viajar por la pantalla. */}
+    {/* El globo solo se enseña cuando ya está en su sitio. */}
     <div
       className="fixed left-1/2 w-[min(380px,calc(100vw-32px))]"
-      style={{ ...(rect ? position : { top: '50%' }), transform: rect ? 'translateX(-50%)' : 'translate(-50%, -50%)', pointerEvents: showing ? 'auto' : 'none' }}
+      style={{ ...(rect ? position : { top: '50%' }), transform: rect ? 'translateX(-50%)' : 'translate(-50%, -50%)', visibility: showing ? 'visible' : 'hidden' }}
     >
-    <div className="rounded-3xl bg-white p-5 shadow-2xl" style={{ opacity: showing ? 1 : 0, transform: `translateY(${showing ? 0 : 6}px)`, transition: slide }}>
+    <div className="rounded-3xl bg-white p-5 shadow-2xl">
       <p className="text-xs font-medium text-neutral-400">{tutorial.title} · Paso {(visibleIndex ?? index) + 1} de {steps.length}</p>
       <h2 id="tutorial-title" className="mt-1 text-lg font-semibold tracking-tight text-neutral-950">{shownStep.title}</h2>
       <p id="tutorial-text" className="mt-2 text-sm leading-6 text-neutral-600">{shownStep.text}</p>
@@ -204,7 +180,7 @@ export default function TutorialOverlay() {
         {(visibleIndex ?? index) > 0 && <button type="button" onClick={() => goToStep(index - 1)} className="whitespace-nowrap rounded-xl border border-neutral-200 px-2.5 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">Anterior</button>}
         <button ref={nextButton} type="button" onClick={() => (last ? closeTutorial() : goToStep(index + 1))} className="whitespace-nowrap rounded-xl bg-neutral-900 px-3.5 py-2 text-sm font-medium text-white">{(visibleIndex ?? index) === steps.length - 1 ? 'Terminar' : 'Siguiente'}</button>
       </div>
-      <div className="mt-3 flex justify-center gap-1" aria-hidden>{steps.map((_, dot) => <span key={dot} className={`h-1.5 rounded-full transition-all ${dot === (visibleIndex ?? index) ? 'w-4 bg-neutral-900' : 'w-1.5 bg-neutral-300'}`} />)}</div>
+      <div className="mt-3 flex justify-center gap-1" aria-hidden>{steps.map((_, dot) => <span key={dot} className={`h-1.5 rounded-full ${dot === (visibleIndex ?? index) ? 'w-4 bg-neutral-900' : 'w-1.5 bg-neutral-300'}`} />)}</div>
     </div>
     </div>
   </div>, document.body)
