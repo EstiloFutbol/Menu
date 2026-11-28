@@ -19,14 +19,14 @@
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.468.0",
     "pdfjs-dist": "^6.3.289",
-    "react": "^19.1.1",
+    "react": "^19.3.1",
     "react-dom": "^19.1.1",
     "tesseract.js": "^6.0.1"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.13",
     "@tesseract.js-data/spa": "^1.0.0",
-    "@types/react": "^19.1.16",
+    "@types/react": "^19.3.2",
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "sharp": "^0.34.5",
